@@ -670,15 +670,7 @@ blockquote + cite {
   z-index: 36;
 }
 
-/* ---------- Couple Love Calculator (Liquid Glass) ---------- */
-.liquid-glass-svg-defs {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
+/* ---------- Couple Love Calculator (GPU-Optimized Liquid Glass) ---------- */
 .love-calc-wrap {
   width: 100%;
   max-width: 680px;
@@ -687,27 +679,26 @@ blockquote + cite {
 }
 
 .love-calc-card.liquid-glass-box {
-  --gx: 28%;
-  --gy: 18%;
-  --g-angle: 135deg;
   position: relative;
   padding: 38px 36px;
   border-radius: 30px;
   border: none;
   overflow: hidden;
   isolation: isolate;
+  contain: layout paint;
+  transform: translateZ(0);
   /* Smoked dark-ruby liquid glass core for 100% text contrast + wet specular meniscus rim */
   background: linear-gradient(
     145deg,
-    rgba(18, 3, 9, 0.68) 0%,
-    rgba(10, 2, 5, 0.76) 50%,
-    rgba(20, 3, 10, 0.70) 100%
+    rgba(18, 3, 9, 0.74) 0%,
+    rgba(10, 2, 5, 0.82) 50%,
+    rgba(20, 3, 10, 0.76) 100%
   );
-  backdrop-filter: blur(28px) saturate(180%) brightness(0.72) contrast(1.08);
-  -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(0.72) contrast(1.08);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
   box-shadow:
-    0 28px 68px -10px rgba(0, 0, 0, 0.75),
-    0 6px 28px rgba(220, 25, 65, 0.18),
+    0 24px 56px -10px rgba(0, 0, 0, 0.72),
+    0 4px 22px rgba(220, 25, 65, 0.16),
     inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.82),
     inset 0 -1.5px 1.5px 0 rgba(255, 215, 230, 0.45),
     inset 1.5px 0 1.5px 0 rgba(255, 245, 250, 0.38),
@@ -715,32 +706,9 @@ blockquote + cite {
     inset 0 16px 34px -12px rgba(255, 255, 255, 0.14),
     inset 0 -20px 38px -14px rgba(255, 95, 135, 0.14);
   text-align: center;
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
 }
 
-/* Layer 1: Edge-only optical SVG liquid distortion (keeps center dark & readable) */
-.liquid-glass-backdrop {
-  position: absolute;
-  inset: -12px;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      90% 42% at 50% -8%,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(255, 220, 235, 0.04) 45%,
-      transparent 80%
-    ),
-    radial-gradient(
-      70% 45% at 88% 105%,
-      rgba(255, 110, 150, 0.12) 0%,
-      transparent 70%
-    );
-  filter: url(#liquidGlassLens);
-  opacity: 0.75;
-}
-
-/* Layer 2: Subtle pointer-tracking liquid caustics & top meniscus sheen */
+/* Layer 1: Curved liquid dome sheen & top meniscus reflection (pure GPU gradient) */
 .liquid-glass-caustics {
   position: absolute;
   inset: 0;
@@ -749,9 +717,14 @@ blockquote + cite {
   border-radius: inherit;
   background:
     radial-gradient(
-      380px circle at var(--gx) var(--gy),
-      rgba(255, 240, 246, 0.11) 0%,
-      rgba(255, 195, 215, 0.04) 38%,
+      420px circle at 28% 14%,
+      rgba(255, 240, 246, 0.12) 0%,
+      rgba(255, 195, 215, 0.04) 40%,
+      transparent 70%
+    ),
+    radial-gradient(
+      360px circle at 82% 92%,
+      rgba(255, 110, 150, 0.10) 0%,
       transparent 68%
     ),
     linear-gradient(
@@ -763,7 +736,7 @@ blockquote + cite {
     );
 }
 
-/* Layer 3: 360-degree wet specular meniscus rim with dual opposite catchlights */
+/* Layer 2: 360-degree wet specular meniscus rim with dual opposite catchlights */
 .liquid-glass-meniscus {
   position: absolute;
   inset: 0;
@@ -772,7 +745,7 @@ blockquote + cite {
   border-radius: inherit;
   padding: 1.5px;
   background: linear-gradient(
-    var(--g-angle, 135deg),
+    135deg,
     rgba(255, 255, 255, 0.95) 0%,
     rgba(255, 230, 240, 0.52) 20%,
     rgba(255, 175, 200, 0.18) 46%,
@@ -852,7 +825,7 @@ blockquote + cite {
     0 2px 10px rgba(0, 0, 0, 0.85);
 }
 
-/* Smoked Liquid Glass Capsule Input */
+/* Smoked Liquid Glass Capsule Input (no nested backdrop-filter) */
 .calc-input {
   width: 100%;
   padding: 12px 16px;
@@ -860,11 +833,9 @@ blockquote + cite {
   border: 1px solid rgba(255, 240, 245, 0.34);
   background: linear-gradient(
     145deg,
-    rgba(8, 1, 4, 0.72) 0%,
-    rgba(18, 3, 9, 0.64) 100%
+    rgba(8, 1, 4, 0.76) 0%,
+    rgba(18, 3, 9, 0.68) 100%
   );
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.38),
     inset 0 1px 1px rgba(255, 255, 255, 0.48),
@@ -887,8 +858,8 @@ blockquote + cite {
   border-color: rgba(255, 230, 240, 0.82);
   background: linear-gradient(
     145deg,
-    rgba(16, 2, 8, 0.82) 0%,
-    rgba(28, 4, 13, 0.74) 100%
+    rgba(16, 2, 8, 0.85) 0%,
+    rgba(28, 4, 13, 0.78) 100%
   );
   box-shadow:
     0 8px 26px rgba(255, 65, 100, 0.32),
@@ -901,12 +872,11 @@ blockquote + cite {
   font-size: 22px;
   color: #ff3355;
   text-shadow: 0 0 14px rgba(255, 51, 85, 0.8);
-  animation: dividerBeat 1.5s ease-in-out infinite;
 }
 
 @keyframes dividerBeat {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.22); }
+  50% { transform: scale(1.18); }
 }
 
 /* Liquid Ruby-Rose Glass Pill Button */
@@ -920,12 +890,10 @@ blockquote + cite {
   border: 1px solid rgba(255, 235, 242, 0.62);
   background: linear-gradient(
     135deg,
-    rgba(220, 20, 56, 0.88) 0%,
-    rgba(245, 42, 82, 0.78) 50%,
-    rgba(175, 10, 38, 0.88) 100%
+    rgba(220, 20, 56, 0.9) 0%,
+    rgba(245, 42, 82, 0.82) 50%,
+    rgba(175, 10, 38, 0.9) 100%
   );
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
   color: #ffffff;
   font-family: var(--sans);
   font-size: 11.5px;
@@ -939,7 +907,7 @@ blockquote + cite {
     inset 0 1.5px 1px rgba(255, 255, 255, 0.78),
     inset 0 -1.5px 2px rgba(255, 190, 210, 0.4),
     inset 0 12px 20px -6px rgba(255, 255, 255, 0.24);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .calc-submit-btn:hover {
   transform: translateY(-2px) scale(1.02);
@@ -948,7 +916,6 @@ blockquote + cite {
     inset 0 1.5px 1.5px rgba(255, 255, 255, 0.92),
     inset 0 -1.5px 2px rgba(255, 210, 225, 0.48),
     inset 0 14px 24px -6px rgba(255, 255, 255, 0.32);
-  filter: brightness(1.08);
 }
 .calc-submit-btn:active {
   transform: translateY(0) scale(0.99);
@@ -959,17 +926,17 @@ blockquote + cite {
   margin-top: 28px;
   padding-top: 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
-  animation: shrineReveal 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: shrineReveal 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes shrineReveal {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.95);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -985,8 +952,8 @@ blockquote + cite {
   padding: 54px 48px 64px;
   background: radial-gradient(
     closest-side,
-    rgba(10, 1, 5, 0.58) 0%,
-    rgba(10, 1, 5, 0.28) 65%,
+    rgba(10, 1, 5, 0.62) 0%,
+    rgba(10, 1, 5, 0.30) 65%,
     transparent 100%
   );
 }
@@ -998,27 +965,16 @@ blockquote + cite {
   height: 100%;
   pointer-events: none;
   overflow: visible;
-  animation: heartWreathFloat 3.6s ease-in-out infinite;
-}
-
-@keyframes heartWreathFloat {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.022); }
 }
 
 .heart-aura-path {
-  animation: auraPulse 2.4s ease-in-out infinite;
-}
-
-@keyframes auraPulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.95; }
+  opacity: 0.85;
 }
 
 .heart-draw-path {
   stroke-dasharray: 1650;
   stroke-dashoffset: 1650;
-  animation: drawCoupleHeart 2.1s cubic-bezier(0.35, 0, 0.25, 1) forwards;
+  animation: drawCoupleHeart 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
 }
 
 @keyframes drawCoupleHeart {
@@ -1028,8 +984,7 @@ blockquote + cite {
 .heart-shine-beam {
   stroke-dasharray: 120 1530;
   stroke-dashoffset: 1650;
-  filter: drop-shadow(0 0 8px rgba(255, 235, 180, 0.95));
-  animation: orbitHeartBeam 3.4s linear infinite;
+  animation: orbitHeartBeam 4.2s linear infinite;
 }
 
 @keyframes orbitHeartBeam {
@@ -1040,26 +995,19 @@ blockquote + cite {
 .wreath-petal-node use {
   opacity: 0;
   transform-origin: center;
-  animation:
-    petalPopIn 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
-    petalBreeze 3.2s ease-in-out infinite;
+  animation: petalPopIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   animation-delay: inherit;
 }
 
 @keyframes petalPopIn {
   from {
     opacity: 0;
-    transform: scale(0) rotate(-35deg);
+    transform: scale(0) rotate(-25deg);
   }
   to {
     opacity: 0.95;
     transform: scale(1) rotate(0deg);
   }
-}
-
-@keyframes petalBreeze {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(9deg) scale(1.08); }
 }
 
 .couple-names-inner {
@@ -1094,42 +1042,49 @@ blockquote + cite {
 .petal-name-char {
   position: relative;
   display: inline-block;
-  animation: charPetalBloom 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(0.25s + var(--char-idx, 0) * 0.055s);
+  animation: charPetalBloom 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(0.15s + var(--char-idx, 0) * 0.045s);
 }
 
 @keyframes charPetalBloom {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.7) rotate(-8deg);
-    filter: blur(4px);
+    transform: translateY(10px) scale(0.8);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1) rotate(0deg);
-    filter: blur(0px);
+    transform: translateY(0) scale(1);
   }
 }
 
 .char-letter {
+  position: relative;
   display: inline-block;
   background-image: linear-gradient(
     135deg,
-    #ff4d6d 0%,
-    #ffb3c6 28%,
-    #fff0b8 50%,
-    #ff7592 75%,
-    #ff3355 100%
+    #ff5270 0%,
+    #ffc2d1 32%,
+    #fff2bd 52%,
+    #ff7a96 78%,
+    #ff3859 100%
   );
-  background-size: 240% 240%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  filter:
-    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.95))
-    drop-shadow(0 0 12px rgba(230, 25, 60, 0.6));
-  animation: loveColorFlow 4.5s ease-in-out infinite;
+}
+
+.char-letter::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.95),
+    0 0 14px rgba(230, 25, 60, 0.55);
+  pointer-events: none;
 }
 
 .char-mini-petal {
@@ -1139,15 +1094,7 @@ blockquote + cite {
   bottom: -3px;
   right: -4px;
   pointer-events: none;
-  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.7));
   transform: rotate(28deg);
-  animation: miniPetalFlutter 2.8s ease-in-out infinite;
-  animation-delay: calc(var(--char-idx, 0) * 0.15s);
-}
-
-@keyframes miniPetalFlutter {
-  0%, 100% { transform: rotate(24deg) scale(1); }
-  50% { transform: rotate(42deg) scale(1.16); }
 }
 
 .couple-ampersand-heart {
@@ -1157,7 +1104,6 @@ blockquote + cite {
   text-shadow:
     0 0 14px rgba(255, 46, 76, 0.9),
     0 0 28px rgba(255, 180, 120, 0.6);
-  animation: dividerBeat 1.25s ease-in-out infinite;
 }
 
 .love-score-pill {
@@ -1169,11 +1115,9 @@ blockquote + cite {
   border: 1px solid rgba(255, 240, 220, 0.5);
   background: linear-gradient(
     135deg,
-    rgba(20, 3, 9, 0.78) 0%,
-    rgba(10, 1, 5, 0.84) 100%
+    rgba(20, 3, 9, 0.85) 0%,
+    rgba(10, 1, 5, 0.90) 100%
   );
-  backdrop-filter: blur(14px) saturate(170%);
-  -webkit-backdrop-filter: blur(14px) saturate(170%);
   box-shadow:
     0 6px 20px rgba(0, 0, 0, 0.45),
     inset 0 1px 1px rgba(255, 255, 255, 0.65),
@@ -1228,11 +1172,9 @@ blockquote + cite {
   border: 1px solid rgba(255, 240, 245, 0.42);
   background: linear-gradient(
     135deg,
-    rgba(16, 2, 8, 0.74) 0%,
-    rgba(28, 4, 13, 0.66) 100%
+    rgba(16, 2, 8, 0.80) 0%,
+    rgba(28, 4, 13, 0.74) 100%
   );
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
   box-shadow:
     0 6px 18px rgba(0, 0, 0, 0.42),
     inset 0 1px 1px rgba(255, 255, 255, 0.6),

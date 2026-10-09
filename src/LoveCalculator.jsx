@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { playCelebrationHarmony } from './LoveMelody.jsx'
 
 const DESTINY_MESSAGES = [
@@ -53,18 +54,71 @@ function evalHeartPoint(t, scaleX = 235, scaleY = 185, cx = 310, cy = 245) {
   }
 }
 
-// Draws a single 3D-shaded velvet rose petal on a 2D canvas context
-function drawCanvasRosePetal(ctx, p) {
-  ctx.save()
-  ctx.translate(p.x, p.y)
-  ctx.rotate(p.rot)
-  // 3D tumbling illusion via oscillating X/Y scale
-  const flipX = Math.cos(p.tilt) * p.scale
-  const flipY = (0.62 + 0.38 * Math.abs(Math.sin(p.pitch))) * p.scale
-  ctx.scale(flipX, flipY)
-  ctx.globalAlpha = p.alpha
+// Pre-rendered offscreen sprite cache so confetti blast uses fast GPU ctx.drawImage (zero per-frame shadowBlur/gradients)
+let cachedSprites = null
 
-  if (p.type === 'spark') {
+function getConfettiSprites() {
+  if (cachedSprites || typeof document === 'undefined') return cachedSprites
+
+  const palette = [
+    { color: '#c91229', highlight: '#ff2e4c' },
+    { color: '#e61938', highlight: '#ff4d6a' },
+    { color: '#9e0b20', highlight: '#e01e3c' },
+    { color: '#ff2a4b', highlight: '#ff758f' },
+  ]
+
+  const createSprite = (drawFn) => {
+    const c = document.createElement('canvas')
+    c.width = 48
+    c.height = 48
+    const ctx = c.getContext('2d')
+    ctx.translate(24, 24)
+    drawFn(ctx)
+    return c
+  }
+
+  const petals = palette.map((pal) =>
+    createSprite((ctx) => {
+      const grad = ctx.createRadialGradient(0, 4, 2, 0, -4, 19)
+      grad.addColorStop(0, '#59040e')
+      grad.addColorStop(0.48, pal.color)
+      grad.addColorStop(0.88, pal.highlight)
+      grad.addColorStop(1, '#ff99ac')
+
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.moveTo(0, 14)
+      ctx.bezierCurveTo(-14, 8, -19, -8, -9, -16)
+      ctx.bezierCurveTo(-4, -19, -1, -16, 0, -13)
+      ctx.bezierCurveTo(1, -16, 4, -19, 9, -16)
+      ctx.bezierCurveTo(19, -8, 14, 8, 0, 14)
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.strokeStyle = 'rgba(255, 190, 205, 0.28)'
+      ctx.lineWidth = 0.9
+      ctx.beginPath()
+      ctx.moveTo(0, 11)
+      ctx.quadraticCurveTo(1, -1, 0, -11)
+      ctx.stroke()
+    })
+  )
+
+  const hearts = palette.map((pal) =>
+    createSprite((ctx) => {
+      ctx.fillStyle = pal.highlight
+      ctx.beginPath()
+      ctx.moveTo(0, 5)
+      ctx.bezierCurveTo(-10, -5, -14, -14, -6, -16)
+      ctx.bezierCurveTo(-1, -17, 0, -11, 0, -9)
+      ctx.bezierCurveTo(0, -11, 1, -17, 6, -16)
+      ctx.bezierCurveTo(14, -14, 10, -5, 0, 5)
+      ctx.closePath()
+      ctx.fill()
+    })
+  )
+
+  const spark = createSprite((ctx) => {
     const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 10)
     grad.addColorStop(0, '#fff9e6')
     grad.addColorStop(0.4, '#ffd27d')
@@ -73,89 +127,22 @@ function drawCanvasRosePetal(ctx, p) {
     ctx.beginPath()
     ctx.arc(0, 0, 10, 0, Math.PI * 2)
     ctx.fill()
-    ctx.restore()
-    return
-  }
+  })
 
-  if (p.type === 'heart') {
-    ctx.fillStyle = p.color
-    ctx.shadowColor = 'rgba(255, 50, 85, 0.65)'
-    ctx.shadowBlur = 10
-    ctx.beginPath()
-    ctx.moveTo(0, 5)
-    ctx.bezierCurveTo(-10, -5, -14, -14, -6, -16)
-    ctx.bezierCurveTo(-1, -17, 0, -11, 0, -9)
-    ctx.bezierCurveTo(0, -11, 1, -17, 6, -16)
-    ctx.bezierCurveTo(14, -14, 10, -5, 0, 5)
-    ctx.closePath()
-    ctx.fill()
-    ctx.restore()
-    return
-  }
-
-  // Sculpted botanical rose petal silhouette with cleft upper lip
-  const grad = ctx.createRadialGradient(0, 4, 2, 0, -4, 20)
-  grad.addColorStop(0, '#59040e') // deep velvet base
-  grad.addColorStop(0.48, p.color) // lush crimson body
-  grad.addColorStop(0.88, p.highlight) // scarlet rim
-  grad.addColorStop(1, '#ff99ac') // soft velvet edge sheen
-
-  ctx.fillStyle = grad
-  ctx.shadowColor = 'rgba(180, 10, 35, 0.45)'
-  ctx.shadowBlur = 8
-
-  ctx.beginPath()
-  ctx.moveTo(0, 14) // tapered petal base
-  ctx.bezierCurveTo(-14, 8, -19, -8, -9, -16)
-  ctx.bezierCurveTo(-4, -19, -1, -16, 0, -13) // soft upper cleft
-  ctx.bezierCurveTo(1, -16, 4, -19, 9, -16)
-  ctx.bezierCurveTo(19, -8, 14, 8, 0, 14)
-  ctx.closePath()
-  ctx.fill()
-
-  // Subtle central botanical vein
-  ctx.strokeStyle = 'rgba(255, 190, 205, 0.25)'
-  ctx.lineWidth = 0.9
-  ctx.beginPath()
-  ctx.moveTo(0, 11)
-  ctx.quadraticCurveTo(1, -1, 0, -11)
-  ctx.stroke()
-
-  ctx.restore()
+  cachedSprites = { petals, hearts, spark }
+  return cachedSprites
 }
 
 export default function LoveCalculator() {
   const [partnerOne, setPartnerOne] = useState('')
   const [partnerTwo, setPartnerTwo] = useState('')
   const [result, setResult] = useState(null)
-  const [displayScore, setDisplayScore] = useState(0)
   const [blastKey, setBlastKey] = useState(0)
 
   const canvasRef = useRef(null)
-  const cardRef = useRef(null)
+  const scoreNumRef = useRef(null)
   const particlesRef = useRef([])
   const rafRef = useRef(null)
-
-  const handleCardPointerMove = useCallback((e) => {
-    const el = cardRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / Math.max(rect.width, 1)) * 100
-    const y = ((e.clientY - rect.top) / Math.max(rect.height, 1)) * 100
-    const angle =
-      (Math.atan2(y - 50, x - 50) * 180) / Math.PI + 90
-    el.style.setProperty('--gx', `${x.toFixed(1)}%`)
-    el.style.setProperty('--gy', `${y.toFixed(1)}%`)
-    el.style.setProperty('--g-angle', `${angle.toFixed(1)}deg`)
-  }, [])
-
-  const handleCardPointerLeave = useCallback(() => {
-    const el = cardRef.current
-    if (!el) return
-    el.style.setProperty('--gx', '28%')
-    el.style.setProperty('--gy', '18%')
-    el.style.setProperty('--g-angle', '135deg')
-  }, [])
 
   // Precompute 24 rose petals along the SVG heart contour around the couple's names
   const wreathPetals = useMemo(() => {
@@ -169,70 +156,67 @@ export default function LoveCalculator() {
         (Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x) * 180) / Math.PI
       items.push({
         id: i,
-        x: pt.x,
-        y: pt.y,
-        rot: tangentDeg + 90 + ((i % 3) - 1) * 16,
-        scale: 0.72 + (i % 4) * 0.11,
-        delay: (i * 0.08).toFixed(2),
-        shade: i % 2 === 0 ? '#e31b38' : '#ff3352',
+        x: pt.x.toFixed(1),
+        y: pt.y.toFixed(1),
+        rot: (tangentDeg + 90 + ((i % 3) - 1) * 16).toFixed(1),
+        scale: (0.72 + (i % 4) * 0.11).toFixed(2),
+        delay: (i * 0.06).toFixed(2),
       })
     }
     return items
   }, [])
 
-  // Spawn a massive celebratory Rose Petals + Hearts + Gold Sparkles confetti blast
+  // Fast, hardware-accelerated sprite confetti blast
   const triggerPetalConfettiBlast = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const sprites = getConfettiSprites()
+    if (!sprites) return
+
     const w = (canvas.width = window.innerWidth)
     const h = (canvas.height = window.innerHeight)
-
-    const palette = [
-      { color: '#c91229', highlight: '#ff2e4c' },
-      { color: '#e61938', highlight: '#ff4d6a' },
-      { color: '#9e0b20', highlight: '#e01e3c' },
-      { color: '#ff2a4b', highlight: '#ff758f' },
-    ]
+    canvas.style.display = 'block'
 
     const newParticles = []
-    const total = 195
+    const total = 120
 
     for (let i = 0; i < total; i++) {
-      // Half erupt from the center-bottom cannon, half shower down from the top canopy
       const fromCannon = i < total * 0.62
       const angle = fromCannon
         ? -Math.PI / 2 + (Math.random() - 0.5) * 1.45
         : Math.PI / 2 + (Math.random() - 0.5) * 0.6
       const speed = fromCannon
-        ? 9 + Math.random() * 17
-        : 2 + Math.random() * 5.5
+        ? 9 + Math.random() * 16
+        : 2.5 + Math.random() * 5
 
-      const pal = palette[i % palette.length]
+      const shadeIdx = i % 4
       const typeRoll = Math.random()
-      const type =
-        typeRoll < 0.74 ? 'petal' : typeRoll < 0.88 ? 'heart' : 'spark'
+      const sprite =
+        typeRoll < 0.74
+          ? sprites.petals[shadeIdx]
+          : typeRoll < 0.88
+            ? sprites.hearts[shadeIdx]
+            : sprites.spark
 
       newParticles.push({
-        type,
+        sprite,
         x: fromCannon ? w * (0.35 + Math.random() * 0.3) : Math.random() * w,
-        y: fromCannon ? h * 0.68 : -20 - Math.random() * h * 0.35,
-        vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 3,
+        y: fromCannon ? h * 0.68 : -20 - Math.random() * h * 0.3,
+        vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 2.8,
         vy: Math.sin(angle) * speed,
-        gravity: 0.14 + Math.random() * 0.08,
+        gravity: 0.15 + Math.random() * 0.08,
         drag: 0.985,
         rot: Math.random() * Math.PI * 2,
         vRot: (Math.random() - 0.5) * 0.07,
         tilt: Math.random() * Math.PI * 2,
-        vTilt: 0.04 + Math.random() * 0.06,
+        vTilt: 0.045 + Math.random() * 0.055,
         pitch: Math.random() * Math.PI * 2,
-        vPitch: 0.03 + Math.random() * 0.05,
+        vPitch: 0.035 + Math.random() * 0.045,
         swayPhase: Math.random() * Math.PI * 2,
         swaySpeed: 0.035 + Math.random() * 0.03,
-        scale: 0.65 + Math.random() * 0.75,
-        color: pal.color,
-        highlight: pal.highlight,
+        scale: 0.68 + Math.random() * 0.72,
         alpha: 1,
-        decay: 0.0022 + Math.random() * 0.0025,
+        decay: 0.0032 + Math.random() * 0.003,
       })
     }
 
@@ -251,9 +235,9 @@ export default function LoveCalculator() {
           p.vx *= p.drag
           p.vy = p.vy * p.drag + p.gravity
           p.swayPhase += p.swaySpeed
-          p.x += p.vx + Math.sin(p.swayPhase) * 1.35
+          p.x += p.vx + Math.sin(p.swayPhase) * 1.25
           p.y += p.vy
-          p.rot += p.vRot + Math.cos(p.swayPhase) * 0.015
+          p.rot += p.vRot + Math.cos(p.swayPhase) * 0.014
           p.tilt += p.vTilt
           p.pitch += p.vPitch
 
@@ -263,19 +247,37 @@ export default function LoveCalculator() {
             p.alpha -= p.decay * 0.45
           }
 
-          if (p.alpha <= 0.01 || p.y > c.height + 60) {
+          if (p.alpha <= 0.015 || p.y > c.height + 50) {
             list.splice(i, 1)
             continue
           }
 
-          drawCanvasRosePetal(ctx, p)
+          const flipX = Math.cos(p.tilt) * p.scale
+          const flipY = (0.62 + 0.38 * Math.abs(Math.sin(p.pitch))) * p.scale
+          const cosR = Math.cos(p.rot)
+          const sinR = Math.sin(p.rot)
+
+          ctx.globalAlpha = p.alpha
+          ctx.setTransform(
+            cosR * flipX,
+            sinR * flipX,
+            -sinR * flipY,
+            cosR * flipY,
+            p.x,
+            p.y
+          )
+          ctx.drawImage(p.sprite, -24, -24, 48, 48)
         }
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.globalAlpha = 1
 
         if (list.length > 0) {
           rafRef.current = requestAnimationFrame(animate)
         } else {
           rafRef.current = null
           ctx.clearRect(0, 0, c.width, c.height)
+          c.style.display = 'none'
         }
       }
       rafRef.current = requestAnimationFrame(animate)
@@ -288,27 +290,33 @@ export default function LoveCalculator() {
     }
   }, [])
 
-  // Animate the love percentage counter from 0% -> target%
+  // Animate the love percentage counter directly via DOM ref (zero React re-renders!)
   useEffect(() => {
-    if (!result) {
-      setDisplayScore(0)
-      return
-    }
+    if (!result) return
+
+    // Refresh ScrollTrigger once after the shrine mounts so scroll bounds stay accurate
+    const refreshId = requestAnimationFrame(() => {
+      ScrollTrigger.refresh()
+    })
+
     let frame = null
     const start = performance.now()
-    const duration = 1600
+    const duration = 1400
     const target = result.score
 
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration)
       const ease = 1 - Math.pow(1 - t, 3)
-      setDisplayScore(Math.round(ease * target))
+      if (scoreNumRef.current) {
+        scoreNumRef.current.textContent = `${Math.round(ease * target)}%`
+      }
       if (t < 1) {
         frame = requestAnimationFrame(tick)
       }
     }
     frame = requestAnimationFrame(tick)
     return () => {
+      cancelAnimationFrame(refreshId)
       if (frame) cancelAnimationFrame(frame)
     }
   }, [result, blastKey])
@@ -362,7 +370,7 @@ export default function LoveCalculator() {
               >
                 <path
                   d="M12 22 C4 17 2 7 7 3 C9.5 1.2 11.2 2.5 12 4.5 C12.8 2.5 14.5 1.2 17 3 C22 7 20 17 12 22 Z"
-                  fill="url(#miniPetalGrad)"
+                  fill="#e61e3d"
                 />
               </svg>
             )}
@@ -379,53 +387,14 @@ export default function LoveCalculator() {
           <canvas
             ref={canvasRef}
             className="petal-confetti-canvas"
+            style={{ display: 'none' }}
             aria-hidden="true"
           />,
           document.body
         )}
 
-      {/* Optical SVG filter for Liquid Glass refraction & surface distortion */}
-      <svg className="liquid-glass-svg-defs" aria-hidden="true">
-        <defs>
-          <filter
-            id="liquidGlassLens"
-            x="-10%"
-            y="-10%"
-            width="120%"
-            height="120%"
-            colorInterpolationFilters="sRGB"
-          >
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency="0.012 0.018"
-              numOctaves="2"
-              seed="7"
-              result="liquidNoise"
-            />
-            <feGaussianBlur
-              in="liquidNoise"
-              stdDeviation="3.5"
-              result="smoothLiquid"
-            />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="smoothLiquid"
-              scale="16"
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      <div
-        ref={cardRef}
-        className="love-calc-card liquid-glass-box"
-        onPointerMove={handleCardPointerMove}
-        onPointerLeave={handleCardPointerLeave}
-      >
-        {/* Multi-layer Liquid Glass optical stack */}
-        <div className="liquid-glass-backdrop" aria-hidden="true" />
+      <div className="love-calc-card liquid-glass-box">
+        {/* Lightweight GPU-composited Liquid Glass layers (zero SVG displacement filters) */}
         <div className="liquid-glass-caustics" aria-hidden="true" />
         <div className="liquid-glass-meniscus" aria-hidden="true" />
 
@@ -514,21 +483,6 @@ export default function LoveCalculator() {
                       <stop offset="100%" stopColor="#6e0515" />
                     </linearGradient>
 
-                    <filter
-                      id="heartGlowFilter"
-                      x="-20%"
-                      y="-20%"
-                      width="140%"
-                      height="140%"
-                    >
-                      <feGaussianBlur stdDeviation="5" result="blur" />
-                      <feComposite
-                        in="SourceGraphic"
-                        in2="blur"
-                        operator="over"
-                      />
-                    </filter>
-
                     {/* Reusable sculpted rose petal symbol for the heart wreath */}
                     <g id="wreathRosePetal">
                       <path
@@ -544,13 +498,17 @@ export default function LoveCalculator() {
                     </g>
                   </defs>
 
-                  {/* Soft outer pulsing crimson aura */}
+                  {/* Soft outer crimson halo (layered vector strokes — zero expensive feGaussianBlur) */}
                   <path
                     className="heart-aura-path"
                     d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
-                    stroke="rgba(255, 50, 85, 0.25)"
-                    strokeWidth="8"
-                    filter="url(#heartGlowFilter)"
+                    stroke="rgba(255, 45, 85, 0.18)"
+                    strokeWidth="12"
+                  />
+                  <path
+                    d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
+                    stroke="rgba(255, 95, 130, 0.25)"
+                    strokeWidth="6"
                   />
 
                   {/* Main animated drawing heart outline around their names */}
@@ -560,7 +518,6 @@ export default function LoveCalculator() {
                     stroke="url(#heartStrokeGrad)"
                     strokeWidth="3.2"
                     strokeLinecap="round"
-                    filter="url(#heartGlowFilter)"
                   />
 
                   {/* Traveling specular gold-white shine beam orbiting the heart */}
@@ -577,10 +534,8 @@ export default function LoveCalculator() {
                     <g
                       key={wp.id}
                       className="wreath-petal-node"
-                      style={{
-                        transform: `translate(${wp.x}px, ${wp.y}px) rotate(${wp.rot}deg) scale(${wp.scale})`,
-                        animationDelay: `${wp.delay}s`,
-                      }}
+                      transform={`translate(${wp.x}, ${wp.y}) rotate(${wp.rot}) scale(${wp.scale})`}
+                      style={{ animationDelay: `${wp.delay}s` }}
                     >
                       <use href="#wreathRosePetal" />
                     </g>
@@ -598,7 +553,9 @@ export default function LoveCalculator() {
                   </div>
 
                   <div className="love-score-pill">
-                    <span className="score-number">{displayScore}%</span>
+                    <span ref={scoreNumRef} className="score-number">
+                      {result.score}%
+                    </span>
                     <span className="score-label">{result.destiny.title}</span>
                   </div>
 

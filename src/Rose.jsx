@@ -336,10 +336,10 @@ export default function Rose({ url, onReady }) {
              uniform float uBreath;
              uniform vec3 uCenter;
              uniform float uRadius;
-             varying vec3 vPetalLocal;
              varying float vPetalRadial;
              varying float vPetalHeight;
-             varying float vPetalWave;`
+             varying float vPetalWave;
+             varying float vPetalVein;`
           )
           .replace(
             '#include <beginnormal_vertex>',
@@ -388,49 +388,33 @@ export default function Rose({ url, onReady }) {
              transformed.y += primaryWave * tipWeightB * waveAmp * safeRad * 0.019;
              transformed += tangentDir * lipFlutter * tipWeightB * waveAmp * safeRad * 0.010;
 
-             vPetalLocal = relB / safeRad;
              vPetalRadial = rnB;
              vPetalHeight = clamp((ynB + 0.5) / 1.1, 0.0, 1.0);
-             vPetalWave = totalWave;`
+             vPetalWave = totalWave;
+             vPetalVein = sin(angleB * 24.0 + sin(rnB * 11.0 + angleB * 4.0) * 1.3);`
           )
 
         shader.fragmentShader = shader.fragmentShader
           .replace(
             '#include <common>',
             `#include <common>
-             varying vec3 vPetalLocal;
              varying float vPetalRadial;
              varying float vPetalHeight;
-             varying float vPetalWave;`
+             varying float vPetalWave;
+             varying float vPetalVein;`
           )
           .replace(
             '#include <color_fragment>',
             `#include <color_fragment>
-             // Deep velvet fold ambient occlusion near petal base + delicate radial vein tint
-             float pAng = atan(vPetalLocal.z, vPetalLocal.x);
-             float veinPhase = pAng * 24.0 + sin(vPetalRadial * 11.0 + pAng * 4.0) * 1.3;
-             float veinLine = 0.5 + 0.5 * sin(veinPhase);
-             float veinDetail = smoothstep(0.12, 0.88, vPetalRadial) * (veinLine - 0.5) * 0.07;
+             // Deep velvet fold ambient occlusion near petal base + precomputed radial vein tint
+             float veinDetail = smoothstep(0.12, 0.88, vPetalRadial) * vPetalVein * 0.035;
              float cavityAO = mix(0.56, 1.06, smoothstep(0.04, 0.72, vPetalRadial * 0.65 + vPetalHeight * 0.55));
              diffuseColor.rgb *= (cavityAO + veinDetail);`
           )
           .replace(
             '#include <roughnessmap_fragment>',
             `#include <roughnessmap_fragment>
-             // Tactile micro-velvet variation between veins and plush petal surface
-             float rAng = atan(vPetalLocal.z, vPetalLocal.x);
-             float rVein = sin(rAng * 24.0 + sin(vPetalRadial * 11.0 + rAng * 4.0) * 1.3);
-             roughnessFactor = clamp(roughnessFactor + rVein * 0.055 - vPetalRadial * 0.04, 0.28, 0.85);`
-          )
-          .replace(
-            '#include <normal_fragment_maps>',
-            `#include <normal_fragment_maps>
-             // Subtle botanical radial vein relief on the view-space normal
-             float nAng = atan(vPetalLocal.z, vPetalLocal.x);
-             float nVein = cos(nAng * 24.0 + sin(vPetalRadial * 11.0 + nAng * 4.0) * 1.3);
-             float veinMask = smoothstep(0.10, 0.40, vPetalRadial) * smoothstep(1.15, 0.45, vPetalRadial);
-             vec3 pTan = normalize(vec3(-vPetalLocal.z, 0.0, vPetalLocal.x) + 1e-4);
-             normal = normalize(normal + pTan * (nVein * veinMask * 0.045));`
+             roughnessFactor = clamp(roughnessFactor + vPetalVein * 0.045 - vPetalRadial * 0.04, 0.28, 0.85);`
           )
           .replace(
             '#include <emissivemap_fragment>',
@@ -442,12 +426,27 @@ export default function Rose({ url, onReady }) {
           )
       }
 
-      const cacheKey = `rose-bloom-v3-realtouch-${meshIdx}`
+      // Lightweight standard material for the 15 bouquet clones (avoids 15x dual-lobe clearcoat+sheen BRDF overdraw)
+      const cloneBaseMat = new THREE.MeshStandardMaterial({
+        map: baseMat.map || null,
+        normalMap: baseMat.normalMap || null,
+        roughnessMap: baseMat.roughnessMap || null,
+        aoMap: baseMat.aoMap || null,
+        roughness: 0.54,
+        metalness: 0.02,
+        envMapIntensity: 1.45,
+        emissive: BASE_EMIT.clone(),
+        side: THREE.DoubleSide,
+      })
+      if (baseMat.normalScale) cloneBaseMat.normalScale.copy(baseMat.normalScale)
+
+      const heroCacheKey = `rose-hero-v4-${meshIdx}`
+      const cloneCacheKey = `rose-clone-v4-${meshIdx}`
       const variantMats = BOUQUET_TINTS.map((_, tIdx) => {
-        const m = tIdx === 0 ? baseMat : baseMat.clone()
+        const m = tIdx === 0 ? baseMat : cloneBaseMat.clone()
         m.userData.tintIdx = tIdx
         m.onBeforeCompile = compilePetalShader
-        m.customProgramCacheKey = () => cacheKey
+        m.customProgramCacheKey = () => (tIdx === 0 ? heroCacheKey : cloneCacheKey)
         m.needsUpdate = true
         petalMats.current.push(m)
         return m
@@ -498,10 +497,13 @@ export default function Rose({ url, onReady }) {
         pivotGroup.add(stemHolder)
         bouquetRef.current.add(pivotGroup)
 
+        const phi = THREE.MathUtils.degToRad(cfg.angleDeg)
         return {
           pivotGroup,
           stemHolder,
           cfg,
+          h: Math.cos(phi),
+          v: Math.sin(phi),
           phase: idx * 1.15 + 0.4,
           hover: 0,
           cushion: 0,
@@ -543,15 +545,22 @@ export default function Rose({ url, onReady }) {
     const { y: headY, radius: headR } = headMetrics.current
 
     // 1. Central Hero Rose hover interaction (active across all scroll sections & in the bouquet center)
-    if (heroRoseRef.current) {
-      heroRoseRef.current.localToWorld(projVec.set(0, headY, 0))
-      projVec.project(state.camera)
-      const hDx = (projVec.x - px) * aspect
-      const hDy = projVec.y - py
-      const hDist = Math.hypot(hDx, hDy)
-
-      const targetHeroHover =
-        isPointerActive && hDist < 0.24 ? Math.pow(1 - hDist / 0.24, 1.5) : 0
+    if (heroRoseRef.current && group.current) {
+      let hDx = 0
+      let hDy = 0
+      let targetHeroHover = 0
+      if (isPointerActive) {
+        projVec
+          .set(0, headY, 0)
+          .applyMatrix4(group.current.matrixWorld)
+          .project(state.camera)
+        hDx = (projVec.x - px) * aspect
+        hDy = projVec.y - py
+        const hDist = Math.hypot(hDx, hDy)
+        if (hDist < 0.24) {
+          targetHeroHover = Math.pow(1 - hDist / 0.24, 1.5)
+        }
+      }
       heroHover.current = damp(heroHover.current, targetHeroHover, 10, dt)
       const hh = heroHover.current
 
@@ -576,9 +585,10 @@ export default function Rose({ url, onReady }) {
     }
 
     // 2. Bouquet Clones emergence + individual rose hover swell & neighbor cushion parting
+    const groupMatWorld = group.current?.matrixWorld
     for (let i = 0; i < bouquetClones.current.length; i++) {
       const item = bouquetClones.current[i]
-      const { pivotGroup, stemHolder, cfg, phase } = item
+      const { pivotGroup, stemHolder, cfg, h, v, phase } = item
       const startP = 0.76 + cfg.stagger * 0.09
       const endP = startP + 0.13
       const localB = THREE.MathUtils.clamp((p - startP) / (endP - startP), 0, 1)
@@ -595,31 +605,40 @@ export default function Rose({ url, onReady }) {
       const ease = 1 - Math.pow(1 - localB, 3)
       const splayEase = ease + Math.sin(ease * Math.PI) * 0.045
 
-      const phi = THREE.MathUtils.degToRad(cfg.angleDeg)
-      const h = Math.cos(phi) // horizontal dome spread (-1 left .. +1 right)
-      const v = Math.sin(phi) // vertical/depth dome spread (-1 front/low .. +1 back/high)
+      const domeDist = cfg.distMul * headR * splayEase
+      const domeDrop = cfg.dropMul * headR * ease
+      const basePosX = h * domeDist
+      const basePosY = headY + (v * headR * 0.52 + domeDrop) * ease
+      const basePosZ = -v * domeDist * 0.88
 
-      // Project this rose's flower-head center into screen space to detect cursor hover
-      pivotGroup.getWorldPosition(projVec)
-      projVec.project(state.camera)
-      const dx = (projVec.x - px) * aspect
-      const dy = projVec.y - py
-      const dist = Math.hypot(dx, dy)
+      let dx = 0
+      let dy = 0
+      let dist = 10
+      let targetHover = 0
+      let targetCushion = 0
 
-      // Direct hover on this specific bouquet rose
-      const targetHover =
-        isPointerActive && dist < 0.21 ? Math.pow(1 - dist / 0.21, 1.55) * ease : 0
+      // Fast direct matrixWorld transform (avoids 15 recursive getWorldPosition scene-graph traversals)
+      if (isPointerActive && groupMatWorld) {
+        projVec
+          .set(basePosX, basePosY, basePosZ)
+          .applyMatrix4(groupMatWorld)
+          .project(state.camera)
+        dx = (projVec.x - px) * aspect
+        dy = projVec.y - py
+        dist = Math.hypot(dx, dy)
+
+        if (dist < 0.21) {
+          targetHover = Math.pow(1 - dist / 0.21, 1.55) * ease
+        } else if (dist < 0.36) {
+          targetCushion = Math.sin(((0.36 - dist) / 0.31) * Math.PI) * ease
+        }
+      }
+
       item.hover = damp(item.hover, targetHover, 11, dt)
-
-      // Soft neighbor cushion ripple when the cursor brushes past adjacent roses
-      const targetCushion =
-        isPointerActive && dist > 0.05 && dist < 0.36
-          ? Math.sin(((0.36 - dist) / 0.31) * Math.PI) * ease
-          : 0
       item.cushion = damp(item.cushion, targetCushion, 9, dt)
 
-      const dirX = dist > 1e-4 ? dx / dist : h
-      const dirY = dist > 1e-4 ? dy / dist : v
+      const dirX = dist > 1e-4 && dist < 1 ? dx / dist : h
+      const dirY = dist > 1e-4 && dist < 1 ? dy / dist : v
 
       // Individual gentle breeze sway + lively flutter when hovered
       const flutterBoost = 1 + item.hover * 1.8
@@ -637,16 +656,13 @@ export default function Rose({ url, onReady }) {
       // Spin around the rose's own stem axis + subtle playful twist on hover
       stemHolder.rotation.y = cfg.spinY * ease + item.hover * 0.26
 
-      // Exact head-packed dome coordinates scaled by measured headRadius + hover lift & neighbor cushion
-      const domeDist = cfg.distMul * headR * splayEase
-      const domeDrop = cfg.dropMul * headR * ease
       const hoverLift = item.hover * 0.085
       const cushionPush = item.cushion * 0.028
 
       pivotGroup.position.set(
-        h * domeDist + h * hoverLift * 0.45 + dirX * cushionPush,
-        headY + (v * headR * 0.52 + domeDrop) * ease + hoverLift * 0.65 + dirY * cushionPush * 0.6,
-        -v * domeDist * 0.88 + hoverLift * 0.75
+        basePosX + h * hoverLift * 0.45 + dirX * cushionPush,
+        basePosY + hoverLift * 0.65 + dirY * cushionPush * 0.6,
+        basePosZ + hoverLift * 0.75
       )
 
       const baseScale = cfg.scale * Math.pow(ease, 0.55)
@@ -746,8 +762,10 @@ export default function Rose({ url, onReady }) {
       const tint = BOUQUET_TINTS[tintIdx] || BOUQUET_TINTS[0]
       const hoverBoost = tintIdx === 0 ? heroHover.current * 0.25 : 0
       mat.color.copy(colorTmp).multiply(tint.mul)
-      mat.sheenColor.copy(BLUSH_SHEEN)
-      mat.sheen = Math.min(1.0, 0.65 + sheenK * 0.35 + hoverBoost)
+      if (mat.sheenColor) {
+        mat.sheenColor.copy(BLUSH_SHEEN)
+        mat.sheen = Math.min(1.0, 0.65 + sheenK * 0.35 + hoverBoost)
+      }
       mat.emissive.copy(emitTmp).multiplyScalar((glowK + hoverBoost) * tint.emitMul)
     }
   })
