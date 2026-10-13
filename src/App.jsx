@@ -53,6 +53,7 @@ export default function App() {
 
     const onTick = (time) => lenis?.raf(time * 1000)
     if (lenis) {
+      window.__lenis = lenis
       lenis.on('scroll', ScrollTrigger.update)
       gsap.ticker.add(onTick)
       gsap.ticker.lagSmoothing(0)
@@ -313,8 +314,8 @@ export default function App() {
       if (loveNote) {
         tl.fromTo(
           loveNote,
-          { borderColor: 'rgba(242, 184, 198, 0)' },
-          { borderColor: 'rgba(242, 184, 198, 0.45)', duration: 1.35, ease: 'power2.out' },
+          { borderColor: 'rgba(245, 196, 83, 0)' },
+          { borderColor: 'rgba(245, 196, 83, 0.65)', duration: 1.35, ease: 'power2.out' },
           noteStart
         )
       }
@@ -407,6 +408,7 @@ export default function App() {
         tl.kill()
       })
       loopTweens.forEach((tw) => tw.kill())
+      if (window.__lenis === lenis) delete window.__lenis
       lenis?.destroy()
     }
   }, [modelState])
@@ -424,8 +426,13 @@ export default function App() {
       <div className="stage">
         {modelState === 'ready' && (
           <Canvas
-            dpr={isMobileOr4K ? [1, 1.5] : [1, 2]}
-            gl={{ antialias: true, powerPreference: 'high-performance' }}
+            dpr={[1, 1.5]}
+            gl={{
+              antialias: false,
+              powerPreference: 'high-performance',
+              stencil: false,
+              depth: true,
+            }}
             camera={{ fov: 36, near: 0.1, far: 60, position: [-0.65, 1.56, 3.23] }}
           >
             <Experience modelUrl={MODEL_URL} onReady={handleSceneReady} />

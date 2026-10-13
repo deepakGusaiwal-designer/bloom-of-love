@@ -61,6 +61,7 @@ const LOVE_PROGRESSION = [
 let sharedAudio = {
   ctx: null,
   masterGain: null,
+  melodyGain: null,
   reverbNode: null,
   isPlaying: false,
 }
@@ -82,26 +83,40 @@ function createLushReverb(ctx) {
   return convolver
 }
 
+function ensureAudioGraph() {
+  if (sharedAudio.ctx) return sharedAudio.ctx
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtx) return null
+
+  const ctx = new AudioCtx()
+  const masterGain = ctx.createGain()
+  masterGain.gain.value = 0.26
+
+  const melodyGain = ctx.createGain()
+  melodyGain.gain.value = 1.0
+  melodyGain.connect(masterGain)
+
+  const reverb = createLushReverb(ctx)
+  const wetGain = ctx.createGain()
+  wetGain.gain.value = 0.6
+
+  masterGain.connect(ctx.destination)
+  masterGain.connect(reverb)
+  reverb.connect(wetGain)
+  wetGain.connect(ctx.destination)
+
+  sharedAudio.ctx = ctx
+  sharedAudio.masterGain = masterGain
+  sharedAudio.melodyGain = melodyGain
+  sharedAudio.reverbNode = reverb
+  return ctx
+}
+
 // Plays a celebratory romantic harp / celesta glissando when the Love Calculator blasts petals
 export function playCelebrationHarmony() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (!AudioCtx) return
-    if (!sharedAudio.ctx) {
-      sharedAudio.ctx = new AudioCtx()
-      sharedAudio.masterGain = sharedAudio.ctx.createGain()
-      sharedAudio.masterGain.gain.value = 0.26
-      sharedAudio.reverbNode = createLushReverb(sharedAudio.ctx)
-
-      const wetGain = sharedAudio.ctx.createGain()
-      wetGain.gain.value = 0.55
-      sharedAudio.masterGain.connect(sharedAudio.ctx.destination)
-      sharedAudio.masterGain.connect(sharedAudio.reverbNode)
-      sharedAudio.reverbNode.connect(wetGain)
-      wetGain.connect(sharedAudio.ctx.destination)
-    }
-
-    const ctx = sharedAudio.ctx
+    const ctx = ensureAudioGraph()
+    if (!ctx) return
     if (ctx.state === 'suspended') {
       ctx.resume()
     }
@@ -144,45 +159,51 @@ export function playCelebrationHarmony() {
   }
 }
 
+// Heart path centered in a 36x36 viewBox
+const HEART_PATH =
+  'M18 31.2 C18 31.2 4.5 22.4 4.5 12.6 C4.5 7.9 8.2 4.5 12.6 4.5 C15.3 4.5 16.9 5.9 18 7.6 C19.1 5.9 20.7 4.5 23.4 4.5 C27.8 4.5 31.5 7.9 31.5 12.6 C31.5 22.4 18 31.2 18 31.2 Z'
+
 export default function LoveMelody() {
-  const [playing, setPlaying] = useState(false)
+  const [playing, setPlaying] = useState(() => Boolean(sharedAudio.isPlaying))
   const barIdxRef = useRef(0)
   const timerRef = useRef(null)
-  const userToggledOffRef = useRef(false)
+  const activeNodesRef = useRef([])
+  const userInteractedWithBtnRef = useRef(false)
 
-  const initAudio = useCallback(() => {
-    if (sharedAudio.ctx) return sharedAudio.ctx
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (!AudioCtx) return null
-
-    const ctx = new AudioCtx()
-    const masterGain = ctx.createGain()
-    masterGain.gain.value = 0.24
-
-    const reverb = createLushReverb(ctx)
-    const wetGain = ctx.createGain()
-    wetGain.gain.value = 0.62
-
-    masterGain.connect(ctx.destination)
-    masterGain.connect(reverb)
-    reverb.connect(wetGain)
-    wetGain.connect(ctx.destination)
-
-    sharedAudio.ctx = ctx
-    sharedAudio.masterGain = masterGain
-    sharedAudio.reverbNode = reverb
-    return ctx
+  const clearScheduledNodes = useCallback(() => {
+    const nodes = activeNodesRef.current
+    activeNodesRef.current = []
+    nodes.forEach((node) => {
+      try {
+        node.stop()
+      } catch {
+        // already stopped
+      }
+      try {
+        node.disconnect()
+      } catch {
+        // ignore
+      }
+    })
   }, [])
 
   const scheduleBar = useCallback(() => {
     const ctx = sharedAudio.ctx
-    const master = sharedAudio.masterGain
-    if (!ctx || !master || !sharedAudio.isPlaying) return
+    const melodyBus = sharedAudio.melodyGain
+    if (!ctx || !melodyBus || !sharedAudio.isPlaying) return
 
     const bar = LOVE_PROGRESSION[barIdxRef.current % LOVE_PROGRESSION.length]
     barIdxRef.current += 1
     const now = ctx.currentTime + 0.05
     const barDuration = 3.9
+
+    const registerOsc = (osc) => {
+      activeNodesRef.current.push(osc)
+      osc.onended = () => {
+        const idx = activeNodesRef.current.indexOf(osc)
+        if (idx !== -1) activeNodesRef.current.splice(idx, 1)
+      }
+    }
 
     // 1. Warm acoustic bass note
     {
@@ -201,9 +222,10 @@ export default function LoveMelody() {
 
       osc.connect(filter)
       filter.connect(gain)
-      gain.connect(master)
+      gain.connect(melodyBus)
       osc.start(now)
       osc.stop(now + barDuration + 0.1)
+      registerOsc(osc)
     }
 
     // 2. Soft lush string pad chord
@@ -214,7 +236,6 @@ export default function LoveMelody() {
 
       osc.type = 'sine'
       osc.frequency.setValueAtTime(midiToFreq(midi), now)
-      // Slight detune for warm chorus richness
       osc.detune.setValueAtTime((i - 1) * 4, now)
 
       filter.type = 'lowpass'
@@ -226,9 +247,10 @@ export default function LoveMelody() {
 
       osc.connect(filter)
       filter.connect(gain)
-      gain.connect(master)
+      gain.connect(melodyBus)
       osc.start(now)
       osc.stop(now + barDuration + 0.5)
+      registerOsc(osc)
     })
 
     // 3. Delicate piano / music-box love melody notes
@@ -237,12 +259,10 @@ export default function LoveMelody() {
       const dur = m.dur
       const freq = midiToFreq(m.note)
 
-      // Fundamental warm piano tone
       const osc1 = ctx.createOscillator()
       osc1.type = 'sine'
       osc1.frequency.setValueAtTime(freq, start)
 
-      // Soft harmonic overtone for celesta / piano bell warmth
       const osc2 = ctx.createOscillator()
       osc2.type = 'triangle'
       osc2.frequency.setValueAtTime(freq * 2, start)
@@ -261,58 +281,96 @@ export default function LoveMelody() {
       osc1.connect(noteGain)
       osc2.connect(overtoneGain)
       overtoneGain.connect(noteGain)
-      noteGain.connect(master)
+      noteGain.connect(melodyBus)
 
       osc1.start(start)
       osc2.start(start)
       osc1.stop(start + dur + 0.08)
       osc2.stop(start + dur + 0.08)
+      registerOsc(osc1)
+      registerOsc(osc2)
     })
   }, [])
 
   const startMelody = useCallback(async () => {
-    const ctx = initAudio()
+    const ctx = ensureAudioGraph()
     if (!ctx) return
+
+    // Synchronously mark as playing so rapid clicks never race
+    sharedAudio.isPlaying = true
+    setPlaying(true)
+
     if (ctx.state === 'suspended') {
       try {
         await ctx.resume()
       } catch {
+        sharedAudio.isPlaying = false
+        setPlaying(false)
         return
       }
     }
-    if (ctx.state !== 'running') return
-    if (sharedAudio.isPlaying) return
 
-    sharedAudio.isPlaying = true
-    setPlaying(true)
-    scheduleBar()
+    // Check if user toggled off while resume was pending
+    if (!sharedAudio.isPlaying) return
+
+    if (sharedAudio.melodyGain) {
+      const now = ctx.currentTime
+      sharedAudio.melodyGain.gain.cancelScheduledValues(now)
+      sharedAudio.melodyGain.gain.setValueAtTime(1.0, now)
+    }
+
     clearInterval(timerRef.current)
+    scheduleBar()
     timerRef.current = setInterval(scheduleBar, 3900)
-  }, [initAudio, scheduleBar])
+  }, [scheduleBar])
 
   const stopMelody = useCallback(() => {
     sharedAudio.isPlaying = false
     setPlaying(false)
     clearInterval(timerRef.current)
-    if (sharedAudio.ctx && sharedAudio.ctx.state === 'running') {
-      sharedAudio.ctx.suspend()
-    }
-  }, [])
+    timerRef.current = null
 
-  const toggleMelody = useCallback(() => {
-    if (sharedAudio.isPlaying) {
-      userToggledOffRef.current = true
-      stopMelody()
-    } else {
-      userToggledOffRef.current = false
-      startMelody()
+    const ctx = sharedAudio.ctx
+    const melodyBus = sharedAudio.melodyGain
+    if (ctx && melodyBus) {
+      try {
+        const now = ctx.currentTime
+        melodyBus.gain.cancelScheduledValues(now)
+        melodyBus.gain.setValueAtTime(Math.max(melodyBus.gain.value, 0.0001), now)
+        melodyBus.gain.exponentialRampToValueAtTime(0.0001, now + 0.08)
+      } catch {
+        // ignore
+      }
     }
-  }, [startMelody, stopMelody])
+    setTimeout(() => {
+      if (!sharedAudio.isPlaying) {
+        clearScheduledNodes()
+      }
+    }, 90)
+  }, [clearScheduledNodes])
 
-  // Gently auto-start on first user gesture if allowed by browser
+  const toggleMelody = useCallback(
+    (e) => {
+      e.stopPropagation()
+      userInteractedWithBtnRef.current = true
+      if (sharedAudio.isPlaying) {
+        stopMelody()
+      } else {
+        startMelody()
+      }
+    },
+    [startMelody, stopMelody]
+  )
+
+  // Auto-start once on first non-button page interaction if user hasn't clicked the button yet
   useEffect(() => {
-    const onFirstGesture = () => {
-      if (!userToggledOffRef.current && !sharedAudio.isPlaying) {
+    const onFirstGesture = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.melody-toggle')) {
+        return
+      }
+      window.removeEventListener('pointerdown', onFirstGesture)
+      window.removeEventListener('keydown', onFirstGesture)
+      if (!userInteractedWithBtnRef.current && !sharedAudio.isPlaying) {
         startMelody()
       }
     }
@@ -328,18 +386,35 @@ export default function LoveMelody() {
   return (
     <button
       type="button"
-      className={`melody-toggle ${playing ? 'playing' : ''}`}
+      className={`melody-toggle ${playing ? 'playing' : 'muted'}`}
       onClick={toggleMelody}
-      aria-label={playing ? 'Pause love melody' : 'Play love melody'}
-      title={playing ? 'Pause Love Melody' : 'Play Love Melody'}
+      aria-pressed={playing}
+      aria-label={playing ? 'Turn sound off' : 'Turn sound on'}
+      title={playing ? 'Sound On — Click to Mute' : 'Sound Off — Click to Play'}
     >
-      <span className="melody-bars" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-        <i />
+      <span className="melody-heart-wrap" aria-hidden="true">
+        <svg
+          className="melody-heart-svg"
+          viewBox="0 0 36 36"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id="heartFillRed" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#ff2e50" />
+              <stop offset="100%" stopColor="#d80e32" />
+            </linearGradient>
+          </defs>
+
+          {/* Solid Love Red heart fill */}
+          <path className="heart-core-fill" d={HEART_PATH} fill="url(#heartFillRed)" />
+
+          {/* Clean smooth heart border */}
+          <path className="heart-base-border" d={HEART_PATH} />
+        </svg>
       </span>
-      <span className="melody-label">{playing ? 'Love Melody' : 'Play Melody'}</span>
+
+      <span className="melody-label">{playing ? 'Sound On' : 'Sound Off'}</span>
     </button>
   )
 }

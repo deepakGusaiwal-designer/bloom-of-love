@@ -848,7 +848,7 @@ export function HeartShape({ count = 9000 }) {
 
 // Builds a curved, cupped 3D botanical rose petal mesh
 function buildRosePetalGeometry() {
-  const geo = new THREE.PlaneGeometry(1, 1, 10, 12)
+  const geo = new THREE.PlaneGeometry(1, 1, 6, 8)
   const pos = geo.attributes.position
   const uv = geo.attributes.uv
 
@@ -1002,7 +1002,7 @@ const PETAL_RAIN_FRAGMENT = /* glsl */ `
  * Activates when the bouquet becomes visible at the bottom of the scroll,
  * showering 3D curved, veined velvet-red rose petals that glide, bank, and flutter.
  */
-export function PetalRain({ count = 110 }) {
+export function PetalRain({ count = 48 }) {
   const meshRef = useRef()
   const size = useThree((s) => s.size)
 

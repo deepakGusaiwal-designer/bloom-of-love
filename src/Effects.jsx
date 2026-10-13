@@ -45,7 +45,7 @@ export default memo(function Effects() {
   })
 
   return (
-    <EffectComposer multisampling={samples}>
+    <EffectComposer multisampling={0}>
       <Bloom
         ref={setBloomRef}
         intensity={0.14}

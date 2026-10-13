@@ -64,48 +64,39 @@ const BG_FRAGMENT = /* glsl */ `
     return 130.0 * dot(m, g);
   }
 
-  // Smooth macro-scale rotational FBM for large sweeping swirls
+  // Smooth macro-scale rotational FBM for large sweeping swirls (fast 2-octave)
   float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.55;
+    float v = 0.55 * (0.5 + 0.5 * snoise(p));
     mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
-    for (int i = 0; i < 3; i++) {
-      v += a * (0.5 + 0.5 * snoise(p));
-      p = rot * p * 1.65 + vec2(1.7, 9.2);
-      a *= 0.45;
-    }
+    p = rot * p * 1.85 + vec2(1.7, 9.2);
+    v += 0.28 * (0.5 + 0.5 * snoise(p));
     return v;
   }
 
   void main() {
     vec2 uv = vUv;
-    // Low spatial multiplier (0.55 instead of 1.65) -> ~3x larger macro swirls
+    // Low spatial multiplier -> large sweeping macro swirls
     vec2 p = (uv - 0.5) * vec2(uAspect, 1.0) * 0.55;
 
     float t = uTime * 0.06 + uProgress * 0.85;
 
-    // Large sweeping vortex twist
+    // Sweeping vortex twist
     vec2 c1 = p - vec2(-0.18 * sin(t * 0.6), 0.14 * cos(t * 0.5));
     float d1 = length(c1);
     float ang1 = atan(c1.y, c1.x) + 2.1 * exp(-d1 * 1.1) * sin(t * 0.5 + 1.0);
     vec2 swirledP = vec2(cos(ang1), sin(ang1)) * d1;
 
-    // Macro domain warping for broad, fluid swirl ribbons
+    // Optimized domain warping
     vec2 q = vec2(
       fbm(swirledP + t * 0.12),
       fbm(swirledP + vec2(3.4, 1.2) - t * 0.10)
     );
 
-    vec2 r = vec2(
-      fbm(swirledP + 1.45 * q + vec2(1.7, 4.2) + t * 0.09),
-      fbm(swirledP + 1.45 * q + vec2(5.3, 2.8) - t * 0.08)
-    );
+    float swirlField = fbm(swirledP + 1.35 * q);
 
-    float swirlField = fbm(swirledP + 1.35 * r);
-
-    // Isolate only the top ~20% of the swirl crests; ~80% of canvas stays 0.0 (pure black)
-    float redMask = smoothstep(0.62, 0.90, swirlField);
-    float crestMask = smoothstep(0.76, 0.96, swirlField);
+    // Isolate top swirl crests; ~80% of canvas stays pure black
+    float redMask = smoothstep(0.48, 0.84, swirlField);
+    float crestMask = smoothstep(0.68, 0.94, swirlField);
 
     // High-frequency screen-space grain for noisy stippled gradient
     vec2 pixel = gl_FragCoord.xy;
@@ -342,7 +333,7 @@ export default function Experience({ modelUrl, onReady }) {
       <HeartShape count={isMobileGPU ? 6500 : 9000} />
 
       {/* 3D velvet red rose petal rain that showers down when the bouquet is visible */}
-      <PetalRain count={isMobileGPU ? 75 : 120} />
+      <PetalRain count={isMobileGPU ? 36 : 64} />
 
       {/* OpenAI GPT-6 Astra style luminous particle spiral */}
       <AstraSpiral count={isMobileGPU ? 8500 : 12000} arms={5} />

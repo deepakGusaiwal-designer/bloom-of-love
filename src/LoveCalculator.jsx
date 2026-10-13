@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { playCelebrationHarmony } from './LoveMelody.jsx'
+import CrystalizedBall from './CrystalizedBall.jsx'
 
 const DESTINY_MESSAGES = [
   {
@@ -39,21 +40,6 @@ function computeLoveScore(name1, name2) {
   return 91 + norm // 91% .. 100%
 }
 
-// Parametric heart curve helper for placing rose petals around the couple's names
-function evalHeartPoint(t, scaleX = 235, scaleY = 185, cx = 310, cy = 245) {
-  const x = 16 * Math.pow(Math.sin(t), 3)
-  const y = -(
-    13 * Math.cos(t) -
-    5 * Math.cos(2 * t) -
-    2 * Math.cos(3 * t) -
-    Math.cos(4 * t)
-  )
-  return {
-    x: cx + (x / 16) * scaleX,
-    y: cy + (y / 16) * scaleY,
-  }
-}
-
 // Pre-rendered offscreen sprite cache so confetti blast uses fast GPU ctx.drawImage (zero per-frame shadowBlur/gradients)
 let cachedSprites = null
 
@@ -61,10 +47,10 @@ function getConfettiSprites() {
   if (cachedSprites || typeof document === 'undefined') return cachedSprites
 
   const palette = [
-    { color: '#c91229', highlight: '#ff2e4c' },
-    { color: '#e61938', highlight: '#ff4d6a' },
-    { color: '#9e0b20', highlight: '#e01e3c' },
-    { color: '#ff2a4b', highlight: '#ff758f' },
+    { color: '#c91229', highlight: '#ff1e42', tip: '#ffd76a' },
+    { color: '#e61938', highlight: '#ff3355', tip: '#ffe49e' },
+    { color: '#d49a2a', highlight: '#f5c453', tip: '#fff2bd' },
+    { color: '#a80d22', highlight: '#e61938', tip: '#f5b942' },
   ]
 
   const createSprite = (drawFn) => {
@@ -82,8 +68,8 @@ function getConfettiSprites() {
       const grad = ctx.createRadialGradient(0, 4, 2, 0, -4, 19)
       grad.addColorStop(0, '#59040e')
       grad.addColorStop(0.48, pal.color)
-      grad.addColorStop(0.88, pal.highlight)
-      grad.addColorStop(1, '#ff99ac')
+      grad.addColorStop(0.86, pal.highlight)
+      grad.addColorStop(1, pal.tip)
 
       ctx.fillStyle = grad
       ctx.beginPath()
@@ -95,7 +81,7 @@ function getConfettiSprites() {
       ctx.closePath()
       ctx.fill()
 
-      ctx.strokeStyle = 'rgba(255, 190, 205, 0.28)'
+      ctx.strokeStyle = 'rgba(255, 218, 130, 0.35)'
       ctx.lineWidth = 0.9
       ctx.beginPath()
       ctx.moveTo(0, 11)
@@ -141,32 +127,11 @@ export default function LoveCalculator() {
 
   const canvasRef = useRef(null)
   const scoreNumRef = useRef(null)
+  const ballSectionRef = useRef(null)
   const particlesRef = useRef([])
   const rafRef = useRef(null)
 
-  // Precompute 24 rose petals along the SVG heart contour around the couple's names
-  const wreathPetals = useMemo(() => {
-    const count = 24
-    const items = []
-    for (let i = 0; i < count; i++) {
-      const t = (i / count) * Math.PI * 2
-      const pt = evalHeartPoint(t, 244, 190, 310, 248)
-      const nextPt = evalHeartPoint(t + 0.05, 244, 190, 310, 248)
-      const tangentDeg =
-        (Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x) * 180) / Math.PI
-      items.push({
-        id: i,
-        x: pt.x.toFixed(1),
-        y: pt.y.toFixed(1),
-        rot: (tangentDeg + 90 + ((i % 3) - 1) * 16).toFixed(1),
-        scale: (0.72 + (i % 4) * 0.11).toFixed(2),
-        delay: (i * 0.06).toFixed(2),
-      })
-    }
-    return items
-  }, [])
-
-  // Fast, hardware-accelerated sprite confetti blast
+  // Fast, hardware-accelerated sprite confetti blast (reduced petal count for smooth experience)
   const triggerPetalConfettiBlast = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -177,48 +142,55 @@ export default function LoveCalculator() {
     const h = (canvas.height = window.innerHeight)
     canvas.style.display = 'block'
 
+    const isSmall = typeof window !== 'undefined' && window.innerWidth < 768
+    const total = isSmall ? 80 : 130
     const newParticles = []
-    const total = 120
 
-    for (let i = 0; i < total; i++) {
-      const fromCannon = i < total * 0.62
-      const angle = fromCannon
-        ? -Math.PI / 2 + (Math.random() - 0.5) * 1.45
-        : Math.PI / 2 + (Math.random() - 0.5) * 0.6
-      const speed = fromCannon
-        ? 9 + Math.random() * 16
-        : 2.5 + Math.random() * 5
+    const spawnWave = (count, delayOffsetY = 0) => {
+      for (let i = 0; i < count; i++) {
+        const fromCannon = i < count * 0.65
+        const angle = fromCannon
+          ? -Math.PI / 2 + (Math.random() - 0.5) * 1.55
+          : Math.PI / 2 + (Math.random() - 0.5) * 0.7
+        const speed = fromCannon
+          ? 9 + Math.random() * 18
+          : 2.5 + Math.random() * 6
 
-      const shadeIdx = i % 4
-      const typeRoll = Math.random()
-      const sprite =
-        typeRoll < 0.74
-          ? sprites.petals[shadeIdx]
-          : typeRoll < 0.88
-            ? sprites.hearts[shadeIdx]
-            : sprites.spark
+        const shadeIdx = i % 4
+        const typeRoll = Math.random()
+        const sprite =
+          typeRoll < 0.78
+            ? sprites.petals[shadeIdx]
+            : typeRoll < 0.90
+              ? sprites.hearts[shadeIdx]
+              : sprites.spark
 
-      newParticles.push({
-        sprite,
-        x: fromCannon ? w * (0.35 + Math.random() * 0.3) : Math.random() * w,
-        y: fromCannon ? h * 0.68 : -20 - Math.random() * h * 0.3,
-        vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 2.8,
-        vy: Math.sin(angle) * speed,
-        gravity: 0.15 + Math.random() * 0.08,
-        drag: 0.985,
-        rot: Math.random() * Math.PI * 2,
-        vRot: (Math.random() - 0.5) * 0.07,
-        tilt: Math.random() * Math.PI * 2,
-        vTilt: 0.045 + Math.random() * 0.055,
-        pitch: Math.random() * Math.PI * 2,
-        vPitch: 0.035 + Math.random() * 0.045,
-        swayPhase: Math.random() * Math.PI * 2,
-        swaySpeed: 0.035 + Math.random() * 0.03,
-        scale: 0.68 + Math.random() * 0.72,
-        alpha: 1,
-        decay: 0.0032 + Math.random() * 0.003,
-      })
+        newParticles.push({
+          sprite,
+          x: fromCannon ? w * (0.32 + Math.random() * 0.36) : Math.random() * w,
+          y: fromCannon ? h * 0.72 - delayOffsetY : -30 - Math.random() * h * 0.4 - delayOffsetY,
+          vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 3.2,
+          vy: Math.sin(angle) * speed,
+          gravity: 0.14 + Math.random() * 0.08,
+          drag: 0.985,
+          rot: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.075,
+          tilt: Math.random() * Math.PI * 2,
+          vTilt: 0.045 + Math.random() * 0.06,
+          pitch: Math.random() * Math.PI * 2,
+          vPitch: 0.035 + Math.random() * 0.05,
+          swayPhase: Math.random() * Math.PI * 2,
+          swaySpeed: 0.032 + Math.random() * 0.03,
+          scale: 0.65 + Math.random() * 0.78,
+          alpha: 1,
+          decay: 0.0024 + Math.random() * 0.0028,
+        })
+      }
     }
+
+    spawnWave(total)
+    // Cascading secondary burst from above for an ongoing romantic shower
+    spawnWave(Math.round(total * 0.35), 60)
 
     particlesRef.current.push(...newParticles)
 
@@ -290,13 +262,22 @@ export default function LoveCalculator() {
     }
   }, [])
 
-  // Animate the love percentage counter directly via DOM ref (zero React re-renders!)
+  // Animate the love percentage counter directly via DOM ref & smoothly scroll to the Crystalized Ball section
   useEffect(() => {
     if (!result) return
 
-    // Refresh ScrollTrigger once after the shrine mounts so scroll bounds stay accurate
+    // Refresh ScrollTrigger & Lenis bounds after the Crystalized Ball section mounts, then scroll to it
     const refreshId = requestAnimationFrame(() => {
       ScrollTrigger.refresh()
+      const el = ballSectionRef.current
+      if (!el) return
+      const lenis = typeof window !== 'undefined' ? window.__lenis : null
+      if (lenis) {
+        lenis.resize()
+        lenis.scrollTo(el, { offset: -20, duration: 1.15 })
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
     })
 
     let frame = null
@@ -341,12 +322,18 @@ export default function LoveCalculator() {
     setBlastKey((k) => k + 1)
     playCelebrationHarmony()
     triggerPetalConfettiBlast()
+    setTimeout(() => {
+      triggerPetalConfettiBlast()
+    }, 650)
   }
 
   const handleReplayBlast = () => {
     setBlastKey((k) => k + 1)
     playCelebrationHarmony()
     triggerPetalConfettiBlast()
+    setTimeout(() => {
+      triggerPetalConfettiBlast()
+    }, 650)
   }
 
   // Split a name into characters adorned with individual tiny rose petals
@@ -447,103 +434,22 @@ export default function LoveCalculator() {
           </form>
 
           {result && (
-            <div key={blastKey} className="couple-shrine">
-              {/* Animated Heart Wreath & Rose Petals Frame Around Their Names */}
-              <div className="couple-heart-stage">
-                <svg
-                  className="couple-heart-svg"
-                  viewBox="0 0 620 500"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient
-                      id="heartStrokeGrad"
-                      x1="0%"
-                      y1="0%"
-                      x2="100%"
-                      y2="100%"
-                    >
-                      <stop offset="0%" stopColor="#ff2a4d" />
-                      <stop offset="35%" stopColor="#ff94b2" />
-                      <stop offset="50%" stopColor="#ffe299" />
-                      <stop offset="70%" stopColor="#ff4769" />
-                      <stop offset="100%" stopColor="#b80d27" />
-                    </linearGradient>
+            <div
+              id="crystalized-ball-section"
+              ref={ballSectionRef}
+              className="couple-shrine"
+            >
+              {/* React Bits Crystalized Ball framing the couple's names & love score */}
+              <div className="couple-ball-stage">
+                <CrystalizedBall
+                  preset="plasma"
+                  color="#ff1e42"
+                  size={0.90}
+                  className="couple-crystal-ball"
+                />
 
-                    <linearGradient
-                      id="miniPetalGrad"
-                      x1="0%"
-                      y1="0%"
-                      x2="100%"
-                      y2="100%"
-                    >
-                      <stop offset="0%" stopColor="#ff4769" />
-                      <stop offset="55%" stopColor="#d41432" />
-                      <stop offset="100%" stopColor="#6e0515" />
-                    </linearGradient>
-
-                    {/* Reusable sculpted rose petal symbol for the heart wreath */}
-                    <g id="wreathRosePetal">
-                      <path
-                        d="M0 13 C-11 8 -14 -5 -6 -12 C-2.5 -14.5 -0.6 -12 0 -9.5 C0.6 -12 2.5 -14.5 6 -12 C14 -5 11 8 0 13 Z"
-                        fill="url(#miniPetalGrad)"
-                      />
-                      <path
-                        d="M0 10 Q1 0 0 -8"
-                        stroke="rgba(255, 205, 215, 0.35)"
-                        strokeWidth="0.8"
-                        fill="none"
-                      />
-                    </g>
-                  </defs>
-
-                  {/* Soft outer crimson halo (layered vector strokes — zero expensive feGaussianBlur) */}
-                  <path
-                    className="heart-aura-path"
-                    d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
-                    stroke="rgba(255, 45, 85, 0.18)"
-                    strokeWidth="12"
-                  />
-                  <path
-                    d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
-                    stroke="rgba(255, 95, 130, 0.25)"
-                    strokeWidth="6"
-                  />
-
-                  {/* Main animated drawing heart outline around their names */}
-                  <path
-                    className="heart-draw-path"
-                    d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
-                    stroke="url(#heartStrokeGrad)"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                  />
-
-                  {/* Traveling specular gold-white shine beam orbiting the heart */}
-                  <path
-                    className="heart-shine-beam"
-                    d="M 310 112 C 255 32, 105 46, 75 168 C 46 286, 195 376, 310 456 C 425 376, 574 286, 545 168 C 515 46, 365 32, 310 112 Z"
-                    stroke="#fff6dc"
-                    strokeWidth="4.2"
-                    strokeLinecap="round"
-                  />
-
-                  {/* 24 Velvet Rose Petals framing the heart contour around the couple's names */}
-                  {wreathPetals.map((wp) => (
-                    <g
-                      key={wp.id}
-                      className="wreath-petal-node"
-                      transform={`translate(${wp.x}, ${wp.y}) rotate(${wp.rot}) scale(${wp.scale})`}
-                      style={{ animationDelay: `${wp.delay}s` }}
-                    >
-                      <use href="#wreathRosePetal" />
-                    </g>
-                  ))}
-                </svg>
-
-                {/* Couple's Names inside the Animated Rose-Petal Heart */}
-                <div className="couple-names-inner">
+                {/* Couple's Names inside the Crystalized Ball */}
+                <div key={blastKey} className="couple-names-inner">
                   <div className="petal-names-lockup">
                     {renderPetalAdornedName(result.name1)}
                     <span className="couple-ampersand-heart" aria-hidden="true">
