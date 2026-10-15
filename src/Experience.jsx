@@ -351,6 +351,7 @@ export default function Experience({ modelUrl, onReady }) {
         fadeOut={[0.72, 0.84]}
       />
 
+
       <Effects />
     </>
   )

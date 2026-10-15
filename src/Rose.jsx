@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
+import BouquetDecoration from './BouquetDecoration.jsx'
 import { story, ramp, damp, BEATS } from './scroll.js'
 
 /*
@@ -99,6 +100,7 @@ export default function Rose({ url, onReady }) {
   const bouquetRef = useRef()
   const bouquetClones = useRef([])
   const headMetrics = useRef({ y: 1.46, radius: 0.22 })
+  const [metrics, setMetrics] = useState({ y: 1.46, radius: 0.22 })
   const heroHover = useRef(0)
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
@@ -279,6 +281,10 @@ export default function Rose({ url, onReady }) {
       y: headCenter.y,
       radius: THREE.MathUtils.clamp(headRadius, 0.15, 0.28),
     }
+    setMetrics({
+      y: headCenter.y,
+      radius: THREE.MathUtils.clamp(headRadius, 0.15, 0.28),
+    })
 
     // ---------- 3 · petal materials + real-touch velvet & wave shader ----------
     petalMats.current = []
@@ -777,6 +783,7 @@ export default function Rose({ url, onReady }) {
           <primitive object={model} />
         </group>
         <group ref={bouquetRef} />
+        <BouquetDecoration headY={metrics.y} headRadius={metrics.radius} />
       </group>
     </group>
   )

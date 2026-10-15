@@ -7,15 +7,6 @@ export default memo(function Effects() {
   const bloomRef = useRef(null)
   const vignetteRef = useRef(null)
 
-  const samples = useMemo(() => {
-    if (typeof window === 'undefined') return 4
-    const isTouchOrSmall =
-      window.innerWidth < 768 || window.matchMedia?.('(pointer: coarse)').matches
-    return isTouchOrSmall ? 0 : 4
-  }, [])
-
-  // Use callback refs so @react-three/postprocessing's wrapEffect (which is not
-  // forwardRef-wrapped and calls JSON.stringify(props) in React 19) ignores ref.
   const setBloomRef = useCallback((el) => {
     bloomRef.current = el
   }, [])
