@@ -99,7 +99,7 @@ export default function Overlay() {
       </section>
 
       {/* Act I — A Seed of Feeling */}
-      <section className="act">
+      <section className="act" id="act-1">
         <div className="inner reveal">
           <p className="eyebrow">
             <SplitChars text="I · A seed of feeling" />

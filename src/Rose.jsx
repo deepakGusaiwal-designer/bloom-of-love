@@ -120,6 +120,8 @@ export default function Rose({ url, onReady }) {
   )
 
   const petalMats = useRef([])
+  const lastColorP = useRef(-1)
+  const lastHoverH = useRef(-1)
   const colorTmp = useMemo(() => new THREE.Color(), [])
   const emitTmp = useMemo(() => new THREE.Color(), [])
   const pivotOffset = useMemo(() => new THREE.Vector3(), [])
@@ -754,25 +756,35 @@ export default function Rose({ url, onReady }) {
     }
 
     // ---------- color story (with botanical bouquet shade variants + hover glow) ----------
-    const k1 = ramp(p, [[0, 0], [BEATS.bloom, 1]]) // velvet ruby → lush crimson
-    const k2 = ramp(p, [[BEATS.bloom, 0], [BEATS.blush + 0.06, 1]]) // crimson → vibrant scarlet
-    const sheenK = ramp(p, [[0, 0.45], [BEATS.blush + 0.08, 1]])
-    const glowK = ramp(p, [[0, 0.24], [BEATS.bloom, 0.42], [1, 0.65]])
+    const heroH = heroHover.current
+    if (
+      Math.abs(p - lastColorP.current) > 0.0008 ||
+      Math.abs(heroH - lastHoverH.current) > 0.005
+    ) {
+      lastColorP.current = p
+      lastHoverH.current = heroH
 
-    colorTmp.lerpColors(DARK, CRIMSON, k1)
-    if (k2 > 0) colorTmp.lerp(SCARLET, k2 * 0.55)
-    emitTmp.lerpColors(BASE_EMIT, GOLD_EMIT, k1)
+      const k1 = ramp(p, [[0, 0], [BEATS.bloom, 1]]) // velvet ruby → lush crimson
+      const k2 = ramp(p, [[BEATS.bloom, 0], [BEATS.blush + 0.06, 1]]) // crimson → vibrant scarlet
+      const sheenK = ramp(p, [[0, 0.45], [BEATS.blush + 0.08, 1]])
+      const glowK = ramp(p, [[0, 0.24], [BEATS.bloom, 0.42], [1, 0.65]])
 
-    for (const mat of petalMats.current) {
-      const tintIdx = mat.userData.tintIdx || 0
-      const tint = BOUQUET_TINTS[tintIdx] || BOUQUET_TINTS[0]
-      const hoverBoost = tintIdx === 0 ? heroHover.current * 0.25 : 0
-      mat.color.copy(colorTmp).multiply(tint.mul)
-      if (mat.sheenColor) {
-        mat.sheenColor.copy(BLUSH_SHEEN)
-        mat.sheen = Math.min(1.0, 0.65 + sheenK * 0.35 + hoverBoost)
+      colorTmp.lerpColors(DARK, CRIMSON, k1)
+      if (k2 > 0) colorTmp.lerp(SCARLET, k2 * 0.55)
+      emitTmp.lerpColors(BASE_EMIT, GOLD_EMIT, k1)
+
+      for (let i = 0; i < petalMats.current.length; i++) {
+        const mat = petalMats.current[i]
+        const tintIdx = mat.userData.tintIdx || 0
+        const tint = BOUQUET_TINTS[tintIdx] || BOUQUET_TINTS[0]
+        const hoverBoost = tintIdx === 0 ? heroH * 0.25 : 0
+        mat.color.copy(colorTmp).multiply(tint.mul)
+        if (mat.sheenColor) {
+          mat.sheenColor.copy(BLUSH_SHEEN)
+          mat.sheen = Math.min(1.0, 0.65 + sheenK * 0.35 + hoverBoost)
+        }
+        mat.emissive.copy(emitTmp).multiplyScalar((glowK + hoverBoost) * tint.emitMul)
       }
-      mat.emissive.copy(emitTmp).multiplyScalar((glowK + hoverBoost) * tint.emitMul)
     }
   })
 

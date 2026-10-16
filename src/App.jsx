@@ -8,6 +8,8 @@ import Lenis from 'lenis'
 import Experience from './Experience.jsx'
 import Overlay from './Overlay.jsx'
 import LoveMelody from './LoveMelody.jsx'
+import RosePlantScroller from './RosePlantScroller.jsx'
+import LoveLoader from './LoveLoader.jsx'
 import { story, ramp, BEATS } from './scroll.js'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -22,8 +24,7 @@ export default function App() {
   const dreamRef = useRef(null)
   const flareRef = useRef(null)
   const raysRef = useRef(null)
-  const growthRef = useRef(null)
-  const budmarkRef = useRef(null)
+  const heroTimelineRef = useRef(null)
 
   // Does the rose model exist?
   useEffect(() => {
@@ -86,12 +87,6 @@ export default function App() {
             [BEATS.bloom + 0.06, 1],
             [BEATS.eternal, 0.35],
           ])
-        if (growthRef.current) growthRef.current.style.height = `${p * 100}%`
-        if (budmarkRef.current) {
-          budmarkRef.current.style.top = `${p * 100}%`
-          const s = 1 + ramp(p, [[0.5, 0], [1, 0.9]])
-          budmarkRef.current.style.transform = `translate(-50%, -50%) scale(${s})`
-        }
       },
     })
 
@@ -132,18 +127,25 @@ export default function App() {
       const sigText = el.querySelector('.sig-text')
       const sigHeart = el.querySelector('.sig-heart')
 
-      // Measure visual lines while words are in their natural layout position
+      const isHero = !!el.closest('.hero')
       const bodyLines = groupWordsIntoLines(bodyWords)
       const noteLines = groupWordsIntoLines(noteWords)
 
       const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: el,
-          start: 'top 82%',
-          end: 'bottom 15%',
-          toggleActions: 'play none none reverse',
-        },
+        paused: isHero,
+        scrollTrigger: isHero
+          ? null
+          : {
+              trigger: el,
+              start: 'top 82%',
+              end: 'bottom 15%',
+              toggleActions: 'play none none reverse',
+            },
       })
+
+      if (isHero) {
+        heroTimelineRef.current = tl
+      }
 
       // 1. Eyebrow — crisp character-by-character 3D wave
       if (chars.length) {
@@ -398,6 +400,10 @@ export default function App() {
     }
     window.addEventListener('resize', onResize, { passive: true })
 
+    if (sceneReady && heroTimelineRef.current) {
+      setTimeout(() => heroTimelineRef.current?.play(), 250)
+    }
+
     return () => {
       window.removeEventListener('resize', onResize)
       clearTimeout(resizeTimer)
@@ -413,6 +419,16 @@ export default function App() {
     }
   }, [modelState])
 
+  // Sequential Entrance: Reveal content ONLY after 3D app particles & rose are ready
+  useEffect(() => {
+    if (sceneReady && heroTimelineRef.current) {
+      const timer = setTimeout(() => {
+        heroTimelineRef.current?.play()
+      }, 250)
+      return () => clearTimeout(timer)
+    }
+  }, [sceneReady])
+
   const isMobileOr4K =
     typeof window !== 'undefined' &&
     (window.innerWidth < 768 ||
@@ -426,6 +442,7 @@ export default function App() {
       <div className="stage">
         {modelState === 'ready' && (
           <Canvas
+            performance={{ min: 0.65 }}
             dpr={[1, 1.5]}
             gl={{
               antialias: false,
@@ -445,18 +462,13 @@ export default function App() {
       <div className="flare" ref={flareRef} />
       <div className="vignette-css" />
 
-      <div className="stem-progress" aria-hidden="true">
-        <div className="growth" ref={growthRef} />
-        <div className="budmark" ref={budmarkRef} />
-      </div>
+      <RosePlantScroller />
 
       <LoveMelody />
 
       <Overlay />
 
-      <div className={`veil ${sceneReady ? 'hidden' : ''}`}>
-        <span>something is about to bloom…</span>
-      </div>
+      <LoveLoader ready={sceneReady} />
     </>
   )
 }

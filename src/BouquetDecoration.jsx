@@ -627,6 +627,7 @@ export default function BouquetDecoration({ headY = 1.46, headRadius = 0.22 }) {
   // ----------------------------------------------------
   const leftStreamerGeo = useMemo(() => createRibbonStreamerGeometry(22, 0.036), [])
   const rightStreamerGeo = useMemo(() => createRibbonStreamerGeometry(26, 0.038), [])
+  const streamerStep = useRef(0)
 
   // ----------------------------------------------------
   // 7. Animation Frame Loop: Smooth Emergence, Wave Physics & Flutter
@@ -813,8 +814,12 @@ export default function BouquetDecoration({ headY = 1.46, headRadius = 0.22 }) {
       geo.computeVertexNormals()
     }
 
-    if (streamersRef.current.left) updateStreamer(leftStreamerGeo, false)
-    if (streamersRef.current.right) updateStreamer(rightStreamerGeo, true)
+    const step = streamerStep.current++
+    if (step % 2 === 0) {
+      if (streamersRef.current.left) updateStreamer(leftStreamerGeo, false)
+    } else {
+      if (streamersRef.current.right) updateStreamer(rightStreamerGeo, true)
+    }
   })
 
   return (

@@ -146,8 +146,8 @@ const ASTRA_VERTEX = /* glsl */ `
 
     // Calm shimmer along the spiral stream (no hover circle flash)
     float streamFade = smoothstep(0.0, 0.08, flowT) * smoothstep(1.0, 0.82, flowT);
-    float twinkle = 0.62 + 0.38 * sin(uTime * (1.15 + sizeW * 1.4) + phase);
-    vAlpha = clamp(streamFade * twinkle * (0.45 + 0.55 * sizeW) * uOpacity, 0.0, 1.0);
+    float twinkle = 0.65 + 0.35 * sin(uTime * (1.15 + sizeW * 1.4) + phase);
+    vAlpha = clamp(streamFade * twinkle * (0.65 + 0.45 * sizeW) * uOpacity, 0.0, 1.0);
 
     // Astra color palette: Champagne White-Gold -> Pure Astra Gold -> Deep Amber -> Rose Gold
     vec3 cWhiteGold = vec3(1.0, 0.97, 0.88);
@@ -160,10 +160,10 @@ const ASTRA_VERTEX = /* glsl */ `
     col = mix(col, cWhiteGold, clamp(pow(sizeW, 2.0) * 0.75, 0.0, 1.0));
     vColor = col;
 
-    // Crisp pinpoint sizing (smaller, ultra-fine stardust)
-    float basePt = 0.52 + pow(sizeW, 2.6) * 1.65;
-    float ptSize = basePt * uPixelRatio * (2.1 / max(-mvPosition.z, 0.65));
-    gl_PointSize = clamp(ptSize, 0.45, 5.5);
+    // Luminous optical pinpoint sizing (crisp, clearly visible stardust)
+    float basePt = 1.35 + pow(sizeW, 1.8) * 3.6;
+    float ptSize = basePt * uPixelRatio * (2.8 / max(-mvPosition.z, 0.6));
+    gl_PointSize = clamp(ptSize, 1.2, 10.0);
   }
 `
 
@@ -174,14 +174,14 @@ const ASTRA_FRAGMENT = /* glsl */ `
   void main() {
     vec2 uv = gl_PointCoord - vec2(0.5);
     float d2 = dot(uv, uv);
-    if (d2 > 0.22) discard;
+    if (d2 > 0.25) discard;
 
-    // Gaussian optical pinpoint profile — zero square quad or cloudy background
-    float core = exp(-d2 * 24.0);
+    // Optical Gaussian pinpoint profile
+    float core = exp(-d2 * 14.0);
     float alpha = core * vAlpha;
-    if (alpha < 0.015) discard;
+    if (alpha < 0.008) discard;
 
-    gl_FragColor = vec4(vColor, clamp(alpha, 0.0, 1.0));
+    gl_FragColor = vec4(vColor * 1.25, clamp(alpha * 1.35, 0.0, 1.0));
   }
 `
 
@@ -264,7 +264,7 @@ export function AstraSpiral({ count = 12000, arms = 5 }) {
         },
         transparent: true,
         depthWrite: false,
-        blending: THREE.NormalBlending,
+        blending: THREE.AdditiveBlending,
       }),
     []
   )
@@ -332,19 +332,42 @@ const DUST_VERTEX = /* glsl */ `
   uniform float uTime;
   uniform float uSize;
   uniform float uPixelRatio;
+  uniform float uRise;
+  uniform float uDrift;
+  uniform vec3 uCenter;
+  uniform vec3 uArea;
   attribute float aScale;
   attribute float aPhase;
+  attribute vec4 aSeed; // z: phase, w: speed
   varying float vTwinkle;
 
   void main() {
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vec3 pos = position;
+    float ph = aSeed.z;
+    float sp = aSeed.w;
+
+    // GPU-accelerated drift and rise (eliminates CPU array mutation & buffer re-uploads)
+    pos.x += sin(uTime * 0.25 * sp + ph) * uDrift * 0.55;
+    pos.z += cos(uTime * 0.20 * sp + ph * 1.7) * uDrift * 0.55;
+
+    if (uRise > 0.0 && uArea.y > 0.001) {
+      float spanY = uArea.y;
+      float minY = uCenter.y - spanY * 0.5;
+      float localY = position.y - minY;
+      float totalRise = localY + uTime * uRise * 0.45 * sp;
+      pos.y = minY + mod(totalRise, spanY);
+    } else {
+      pos.y += sin(uTime * 0.16 * sp + ph) * uDrift * 0.35;
+    }
+
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     float twinkle = 0.68 + 0.32 * sin(uTime * 1.35 + aPhase);
     vTwinkle = clamp(twinkle, 0.0, 1.15);
     gl_PointSize = clamp(
-      uSize * aScale * (0.85 + 0.3 * twinkle) * uPixelRatio * (130.0 / max(-mvPosition.z, 0.65)),
-      0.45,
-      5.0
+      uSize * aScale * (1.1 + 0.4 * twinkle) * uPixelRatio * (200.0 / max(-mvPosition.z, 0.65)),
+      1.5,
+      9.5
     );
   }
 `
@@ -357,10 +380,10 @@ const DUST_FRAGMENT = /* glsl */ `
   void main() {
     vec2 uv = gl_PointCoord - vec2(0.5);
     float d2 = dot(uv, uv);
-    if (d2 > 0.22) discard;
-    float core = exp(-d2 * 22.0);
+    if (d2 > 0.25) discard;
+    float core = exp(-d2 * 14.0);
     float alpha = core * vTwinkle * uOpacity;
-    if (alpha < 0.015) discard;
+    if (alpha < 0.008) discard;
     vec3 col = mix(uColor, vec3(1.0, 0.97, 0.85), core * 0.5);
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
@@ -421,12 +444,16 @@ export function Dust({
           uPixelRatio: { value: 1 },
           uColor: { value: new THREE.Color(color) },
           uOpacity: { value: 0 },
+          uRise: { value: rise },
+          uDrift: { value: drift },
+          uCenter: { value: new THREE.Vector3(...center) },
+          uArea: { value: new THREE.Vector3(...(area || [1, 1, 1])) },
         },
         transparent: true,
         depthWrite: false,
-        blending: THREE.NormalBlending,
+        blending: THREE.AdditiveBlending,
       }),
-    [size, color]
+    [size, color, rise, drift, center, area]
   )
 
   useFrame((state) => {
@@ -453,31 +480,6 @@ export function Dust({
     material.uniforms.uOpacity.value = opacity * 0.9
 
     if (points.current) points.current.visible = opacity > 0.005
-    if (!points.current || opacity <= 0.005) return
-
-    const pos = points.current.geometry.attributes.position
-    for (let i = 0; i < count; i++) {
-      const ph = seeds[i * 4 + 2]
-      const sp = seeds[i * 4 + 3]
-      if (orbit) {
-        const a = seeds[i * 4] + t * orbit.speed * 0.55 * sp
-        const r = seeds[i * 4 + 1] + Math.sin(t * 0.4 + ph) * 0.05
-        pos.array[i * 3] = Math.cos(a) * r
-        pos.array[i * 3 + 1] = orbit.y + Math.sin(t * 0.5 * sp + ph) * orbit.wobble * 0.5
-        pos.array[i * 3 + 2] = Math.sin(a) * r
-      } else {
-        pos.array[i * 3] += Math.sin(t * 0.25 * sp + ph) * drift * 0.01
-        pos.array[i * 3 + 2] += Math.cos(t * 0.2 * sp + ph * 1.7) * drift * 0.01
-        if (rise > 0) {
-          pos.array[i * 3 + 1] += rise * 0.009 * sp
-          const top = center[1] + area[1] / 2
-          if (pos.array[i * 3 + 1] > top) pos.array[i * 3 + 1] = center[1] - area[1] / 2
-        } else {
-          pos.array[i * 3 + 1] += Math.sin(t * 0.16 * sp + ph) * drift * 0.006
-        }
-      }
-    }
-    pos.needsUpdate = true
   })
 
   return (
@@ -486,6 +488,7 @@ export function Dust({
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-aScale" args={[scales, 1]} />
         <bufferAttribute attach="attributes-aPhase" args={[phases, 1]} />
+        <bufferAttribute attach="attributes-aSeed" args={[seeds, 4]} />
       </bufferGeometry>
     </points>
   )
@@ -637,15 +640,15 @@ const HEART_PARTICLE_VERTEX = /* glsl */ `
 
     gl_Position = projectionMatrix * mvPosition;
 
-    // Subtle red base opacity + luminous boost at the filling shine frontier
-    float ghostOutline = 0.11;
+    // Velvet red base opacity + luminous boost at the filling shine frontier
+    float ghostOutline = 0.42;
     float reveal = mix(ghostOutline, 1.0, drawnMask);
-    float twinkle = 0.65 + 0.35 * sin(uTime * (1.1 + sizeW * 1.3) + phase);
-    float coreWeight = exp(-abs(aScatter.x) * 32.0);
+    float twinkle = 0.68 + 0.32 * sin(uTime * (1.1 + sizeW * 1.3) + phase);
+    float coreWeight = exp(-abs(aScatter.x) * 28.0);
 
-    float baseAlpha = reveal * twinkle * (0.20 + 0.34 * sizeW * coreWeight) * 0.68;
-    float shineAlpha = fillShine * (0.32 + 0.38 * coreWeight);
-    vAlpha = clamp(baseAlpha + shineAlpha, 0.0, 0.85);
+    float baseAlpha = reveal * twinkle * (0.35 + 0.45 * sizeW * coreWeight) * 0.95;
+    float shineAlpha = fillShine * (0.35 + 0.45 * coreWeight);
+    vAlpha = clamp(baseAlpha + shineAlpha, 0.0, 1.0);
 
     // Subtle velvet red base palette with bright rose-gold & white-gold specular shine when filling
     vec3 cDeepRuby    = vec3(0.54, 0.04, 0.11);
@@ -662,10 +665,10 @@ const HEART_PARTICLE_VERTEX = /* glsl */ `
     col = mix(col, cGoldShine, clamp(pow(fillShine, 1.5) * (0.55 + 0.45 * sizeW), 0.0, 1.0));
     vColor = col;
 
-    // Fine optical pinpoint sizing with a subtle specular swell at the filling shine
-    float basePt = (0.68 + pow(sizeW, 2.4) * 1.85) * (1.0 + fillShine * 0.38);
-    float ptSize = basePt * uPixelRatio * (2.5 / max(-mvPosition.z, 0.4));
-    gl_PointSize = clamp(ptSize, 0.5, 7.2);
+    // Optical pinpoint sizing with a subtle specular swell at the filling shine
+    float basePt = (1.15 + pow(sizeW, 2.0) * 2.8) * (1.0 + fillShine * 0.4);
+    float ptSize = basePt * uPixelRatio * (2.6 / max(-mvPosition.z, 0.4));
+    gl_PointSize = clamp(ptSize, 1.2, 9.0);
   }
 `
 
@@ -767,7 +770,7 @@ export function HeartShape({ count = 9000 }) {
         transparent: true,
         depthWrite: false,
         depthTest: true,
-        blending: THREE.NormalBlending,
+        blending: THREE.AdditiveBlending,
       }),
     []
   )
@@ -1058,8 +1061,8 @@ export function PetalRain({ count = 48 }) {
   useFrame((state, dt) => {
     dt = Math.min(dt, 1 / 20)
     const p = story.smooth
-    // Fade in the red petal rain right as the bouquet becomes visible
-    const targetAlpha = THREE.MathUtils.smoothstep(p, 0.76, 0.90)
+    // Gentle petal rain active from the start, intensifying as the bouquet blooms
+    const targetAlpha = 0.58 + 0.42 * THREE.MathUtils.smoothstep(p, 0.76, 0.90)
     const curAlpha = damp(material.uniforms.uOpacity.value, targetAlpha, 5, dt)
 
     material.uniforms.uOpacity.value = curAlpha

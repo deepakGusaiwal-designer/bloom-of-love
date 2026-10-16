@@ -1,60 +1,83 @@
-# The Bloom of Love
+# 🌹 Forever in Bloom — A Botanical 3D Love Story
 
-A cinematic, scroll-driven love story told by a single rose. Built with React, React Three Fiber, GSAP ScrollTrigger, Lenis smooth scroll, and postprocessing bloom.
+> An interactive, scroll-driven WebGL journey exploring the poetry of love through real-time botany, procedural GLSL shaders, and creative storytelling.
 
-The rose sleeps as a closed bud in near-darkness. As you scroll, it turns toward you, its petals unfold one act at a time, sunlight enters from the side, dewdrops catch the light, a soft blush and golden rim appear — and it finishes fully bloomed, breathing quietly under a dreamy gradient.
+<p align="center">
+  <img src="main_screenshot.png" alt="Forever in Bloom Banner" width="100%" />
+</p>
 
-## Quick start
+<p align="center">
+  <a href="https://forever-in-bloom.vercel.app"><img src="https://img.shields.io/badge/Demo-Live%20Experience-e61938?style=for-the-badge&logo=vercel" alt="Live Demo" /></a>
+  <img src="https://img.shields.io/badge/Three.js-r170-black?style=for-the-badge&logo=three.js" alt="Three.js" />
+  <img src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-6-646cff?style=for-the-badge&logo=vite" alt="Vite" />
+  <img src="https://img.shields.io/badge/GSAP-ScrollTrigger-88ce02?style=for-the-badge&logo=greensock" alt="GSAP" />
+</p>
+
+---
+
+## ✨ Experience Highlights
+
+### 🌿 1. Living Rose Plant Scroller (Bottom-to-Top)
+Replaces native browser scrollbars with an organic, living botanical vine:
+- **Rooted Base**: Anchored in a botanical root mound at the viewport bottom.
+- **Climbing Vine & Trifoliate Foliage**: The stem grows upwards with scroll progress, unfurling realistic compound leaves with translucent lateral veins.
+- **Multiple Blooming Roses Along the Vine**: Side garden rosebuds at Acts II, III, and IV that unfurl as love awakens.
+- **Grand Apex Rose**: A 4-tiered velvet blossom at the tip with golden pollen filaments and sparkling radiance.
+- **Interactive Chapter Tooltips**: Hover over leaf nodes to preview story chapters; click to glide smoothly with Lenis inertia.
+
+### 🌹 2. Procedural Petal Bloom & Breathing Physics
+- Custom GLSL vertex displacement unfolds unrigged 3D rose petals dynamically from a tightly closed bud into lush bloom.
+- Specular dewdrop refraction and gentle harmonic breathing motion.
+
+### 💐 3. 16-Rose Dome Bouquet & Large Waving Jasmine
+- Fanned-out 16-rose hand-tied dome bouquet with eucalyptus foliage collar and champagne satin bow.
+- Large 3D jasmine flowers with real-touch ivory petals, procedural micro-veining, and organic vertex-shader breeze waves.
+
+### 🔮 4. Couple Love Calculator & 3D Crystalized Plasma Ball
+- Liquid glass oracle card where couples enter their names.
+- Triggers a full-screen rose petal and golden confetti explosion.
+- Swirling 3D OGL crystalized plasma heart ball with crimson energy rays and personalized destiny poetry.
+
+---
+
+## 🚀 Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/forever-in-bloom.git
+cd forever-in-bloom
+
+# Install dependencies
 npm install
+
+# Start local development server
 npm run dev
 ```
 
-Open http://localhost:5173 and scroll slowly.
+Open [http://localhost:5173/](http://localhost:5173/) in your browser and scroll slowly.
 
-The rose model is already included at `public/models/rose.glb` (a single red rose with stem and leaves, converted from OBJ, Draco-compressed to ~700 KB). See `MODEL.md` if you'd like to swap in a different one.
+---
 
-An internet connection is needed on first run: fonts load from Google Fonts and the HDRI environment ("sunset" preset) streams from the pmnd.rs asset CDN.
+## 🛠️ Architecture & Tech Stack
 
-## The five acts
+| Layer | Technologies |
+| :--- | :--- |
+| **3D Rendering** | Three.js, React Three Fiber (`@react-three/fiber`), `@react-three/drei` |
+| **Post-Processing** | `@react-three/postprocessing` (Selective Bloom, Depth of Field, Vignette) |
+| **Animation & Physics** | GSAP ScrollTrigger, Lenis smooth inertia scroll |
+| **2D / Shaders** | Custom GLSL vertex & fragment shaders, OGL Raymarched Plasma Ball |
+| **Build & Tooling** | Vite 6, Tailwind/CSS3 custom variables, Puppeteer & FFmpeg recording pipeline |
 
-| Scroll | Act | What happens |
-| --- | --- | --- |
-| 0 – 17% | Hero | Closed bud, near-black, minimal light, scroll indicator |
-| 17 – 33% | A Seed of Feeling | Rose turns toward you, stem sways in wind, camera pushes in, pollen appears |
-| 33 – 50% | Love Awakens | Outer petals loosen, color deepens, background warms to burgundy, subtle depth of field |
-| 50 – 67% | Bloom | Full opening, sunlight from one side, dewdrop sparkles, brief lens flare, light rays, camera circles |
-| 67 – 83% | Blush | Pink sheen on petals, golden rim light, shimmering particles orbit, petals breathe, the Aristotle quote fades in |
-| 83 – 100% | Eternal Love | Camera pulls back, glowing particles rise, dreamy gradient, only breathing remains |
+---
 
-## How the bloom works (with any model)
+## 🎬 Cinematic Video & Screenshots
 
-Free rose models are almost always exported already open, without per-petal rigs. Instead of requiring rigged petals, `src/Rose.jsx` injects a small vertex shader into the petal materials: at progress 0 it folds vertices inward and upward around the flower's axis (a closed bud), and unfolds them organically as `uBloom` rises — outer petals travel further than inner ones, so the opening reads as petals unfolding individually. The same shader adds the breathing.
+- **Full HD 1080p Showcase Video**: [`forever_in_bloom_cinematic_showcase.mp4`](forever_in_bloom_cinematic_showcase.mp4)
+- **4K Screenshots Gallery**: Available under [`public/screenshots/`](public/screenshots/)
 
-Petal meshes are detected by name (`petal`, `rose`, `bud`…), then by material redness as a fallback, and the whole model is auto-centered and auto-scaled — so nearly any GLB rose drops in and works.
+---
 
-## Tuning without scrolling
-
-Append `?debug` to the URL for a Leva panel with a **manual scrub** slider (drive the whole story by hand), plus exposure control.
-
-## Performance notes
-
-- Model is lazy-loaded (Suspense) behind a fade veil; Draco-compressed GLBs are supported automatically.
-- All particles are GPU point clouds with a single generated sprite — no texture downloads, no per-particle objects.
-- Scroll writes to a mutable store; the frame loop reads it. Zero React re-renders while scrolling.
-- DPR capped at 1.8, postprocessing uses mipmap bloom and a half-height DoF pass.
-- `prefers-reduced-motion` disables smooth scrolling and reveal animations.
-
-## Project structure
-
-```
-src/
-  App.jsx         Lenis + ScrollTrigger master timeline, DOM atmosphere (rays, flare, dream gradient)
-  Overlay.jsx     The written story — hero, acts, quote, finale
-  Experience.jsx  Camera choreography, light choreography, environment, particles
-  Rose.jsx        GLB loading, auto-fit, petal detection, bloom + breath shader, color story
-  Particles.jsx   Pollen / dust / orbiting shimmer / rising lights
-  Effects.jsx     Bloom, depth of field, vignette — all scrubbed by scroll
-  scroll.js       Progress store, keyframe ramp, damping, act boundaries
-```
+<p align="center">
+  Crafted with care & love 🌹
+</p>
